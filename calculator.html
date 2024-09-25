@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>计算器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .calculator-container {
+            display: flex;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .calculator {
+            width: 300px;
+            margin-right: 20px;
+        }
+        .history {
+            width: 250px;
+            display: flex;
+            flex-direction: column;
+        }
+        #display {
+            width: 100%;
+            height: 50px;
+            font-size: 18px;
+            text-align: right;
+            margin-bottom: 10px;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+        .history-box {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .history-title {
+            background-color: #3498db;
+            color: white;
+            padding: 12px;
+            margin: 0;
+            text-align: center;
+            font-size: 18px;
+        }
+        #history-display {
+            width: 100%;
+            height: 300px;
+            font-size: 14px;
+            padding: 15px;
+            box-sizing: border-box;
+            border: none;
+            overflow-y: auto;
+            line-height: 1.8;
+            background-color: #f9f9f9;
+        }
+        #history-display::-webkit-scrollbar {
+            width: 8px;
+        }
+        #history-display::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        #history-display::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        #history-display::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        #clear-history {
+            margin-top: 10px;
+            padding: 10px;
+            font-size: 16px;
+        }
+        .buttons {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 5px;
+        }
+        button {
+            padding: 15px;
+            font-size: 18px;
+            border: none;
+            background-color: #e0e0e0;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #d0d0d0;
+        }
+        .operator {
+            background-color: #f0a030;
+            color: white;
+        }
+        .operator:hover {
+            background-color: #e09020;
+        }
+        #equals {
+            background-color: #4CAF50;
+            color: white;
+        }
+        #equals:hover {
+            background-color: #45a049;
+        }
+        #home, #clear-history {
+            grid-column: span 2;
+            background-color: #3498db;
+            color: white;
+        }
+        #home:hover, #clear-history:hover {
+            background-color: #2980b9;
+        }
+        #clear-history {
+            margin-top: 10px;
+        }
+
+        .history-item {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: baseline; /* 改为 baseline 对齐 */
+            line-height: 1.4;
+        }
+        .history-number {
+            font-weight: bold;
+            color: #3498db;
+            margin-right: 8px;
+            font-size: 16px;
+            min-width: 25px; /* 增加最小宽度 */
+            text-align: right;
+        }
+        .history-calculation {
+            flex-grow: 1;
+            font-family: 'Arial', sans-serif;
+        }
+        .history-expression, .history-result {
+            display: inline; /* 改为内联显示 */
+        }
+        .history-result {
+            font-weight: bold;
+            margin-left: 5px; /* 添加左边距 */
+        }
+    </style>
+</head>
+
+<body>
+    <div class="calculator-container">
+        <div class="calculator">
+            <input type="text" id="display" readonly>
+            <div class="buttons">
+                <button onclick="clearDisplay()">C</button>
+                <button onclick="appendToDisplay('(')">(</button>
+                <button onclick="appendToDisplay(')')">)</button>
+                <button onclick="appendToDisplay('/')" class="operator">/</button>
+                <button onclick="appendToDisplay('7')">7</button>
+                <button onclick="appendToDisplay('8')">8</button>
+                <button onclick="appendToDisplay('9')">9</button>
+                <button onclick="appendToDisplay('*')" class="operator">*</button>
+                <button onclick="appendToDisplay('4')">4</button>
+                <button onclick="appendToDisplay('5')">5</button>
+                <button onclick="appendToDisplay('6')">6</button>
+                <button onclick="appendToDisplay('-')" class="operator">-</button>
+                <button onclick="appendToDisplay('1')">1</button>
+                <button onclick="appendToDisplay('2')">2</button>
+                <button onclick="appendToDisplay('3')">3</button>
+                <button onclick="appendToDisplay('+')" class="operator">+</button>
+                <button onclick="appendToDisplay('0')">0</button>
+                <button onclick="appendToDisplay('.')">.</button>
+                <button onclick="backspace()">←</button>
+                <button onclick="calculate()" id="equals">=</button>
+                <button onclick="goHome()" id="home">返回主页</button>
+            </div>
+        </div>
+        <div class="history">
+            <div class="history-box">
+                <h3 class="history-title">历史记录</h3>
+                <div id="history-display"></div>
+            </div>
+            <button onclick="clearHistory()" id="clear-history">清除历史记录</button>
+        </div>
+    </div>
+
+    <script>
+        let calculationCount = 0;
+        let historyArray = [];
+
+        function appendToDisplay(value) {
+            document.getElementById('display').value += value;
+        }
+
+        function clearDisplay() {
+            document.getElementById('display').value = '';
+        }
+
+        function backspace() {
+            var display = document.getElementById('display');
+            display.value = display.value.slice(0, -1);
+        }
+
+        function calculate() {
+            var display = document.getElementById('display');
+            try {
+                var result = eval(display.value);
+                calculationCount++;
+                var calculation = {
+                    number: calculationCount,
+                    expression: display.value,
+                    result: result
+                };
+                historyArray.push(calculation);
+                updateHistoryDisplay();
+                display.value = result;
+                saveHistory();
+            } catch (error) {
+                display.value = '错误';
+            }
+        }
+
+        function goHome() {
+            window.location.href = 'index.html';
+        }
+
+        function clearHistory() {
+            document.getElementById('history-display').innerHTML = '';
+            calculationCount = 0;
+            historyArray = [];
+            localStorage.removeItem('calculatorHistory');
+            localStorage.removeItem('calculationCount');
+        }
+
+        function saveHistory() {
+            localStorage.setItem('calculatorHistory', JSON.stringify(historyArray));
+            localStorage.setItem('calculationCount', calculationCount);
+        }
+
+        function loadHistory() {
+            var savedHistory = localStorage.getItem('calculatorHistory');
+            var savedCount = localStorage.getItem('calculationCount');
+            if (savedHistory) {
+                historyArray = JSON.parse(savedHistory);
+                updateHistoryDisplay();
+            }
+            if (savedCount) {
+                calculationCount = parseInt(savedCount);
+            }
+        }
+
+        function updateHistoryDisplay() {
+            var historyDisplay = document.getElementById('history-display');
+            historyDisplay.innerHTML = historyArray.map(item => 
+                `<div class="history-item">
+                    <span class="history-number">${item.number}.</span>
+                    <div class="history-calculation">
+                        <span class="history-expression">${item.expression}</span>
+                        <span class="history-result">= ${item.result}</span>
+                    </div>
+                </div>`
+            ).join('');
+        }
+
+        console.log("计算器脚本已加载");
+
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("DOM 已加载完成");
+            loadHistory();
+        });
+    </script>
+</body>
+
+</html>

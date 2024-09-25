@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>欢迎页面</title>
+    <style>
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+        .container {
+            text-align: center;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #4a4a4a;
+            margin-bottom: 30px;
+        }
+        .game-button {
+            background-color: #8f7a66;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 15px 30px;
+            font-size: 20px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+            text-decoration: none;
+            display: inline-block;
+            margin: 10px;
+        }
+        .game-button:hover {
+            background-color: #9f8b77;
+            transform: scale(1.05);
+        }
+        .game-button:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>欢迎光临</h1>
+        <button onclick="startGame('2048')" class="game-button">开始2048游戏</button>
+        <button onclick="startGame('dino')" class="game-button">恐龙跳跳跳游戏</button>
+        <button onclick="startGame('calculator')" class="game-button">计算器</button>
+    </div>
+
+    <script>
+        function startGame(game) {
+            if (game === '2048') {
+                window.location.href = 'game.html';
+            } else if (game === 'dino') {
+                window.location.href = 'dino.html';
+            } else if (game === 'calculator') {
+                window.location.href = 'calculator.html';
+            }
+        }
+    </script>
+</body>
+
+</html>
