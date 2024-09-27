@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>宠物信息百科</title>
+    <link rel="stylesheet" href="pet_styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+</head>
+
+<body>
+    <header>
+        <div class="header-content">
+            <h1>宠物信息百科</h1>
+            <nav>
+                <ul>
+                    <li><a href="#" data-pet="dogs"><i class="fas fa-dog"></i> 狗狗</a></li>
+                    <li><a href="#" data-pet="cats"><i class="fas fa-cat"></i> 猫咪</a></li>
+                    <li><a href="#" data-pet="birds"><i class="fas fa-dove"></i> 鸟类</a></li>
+                    <li><a href="#" data-pet="rabbits"><i class="fas fa-rabbit"></i> 兔子</a></li>
+                    <li><a href="#" data-pet="fish"><i class="fas fa-fish"></i> 鱼类</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section id="search">
+            <div class="search-container">
+                <input type="text" id="searchInput" placeholder="搜索宠物...">
+                <button id="searchButton"><i class="fas fa-search"></i></button>
+            </div>
+        </section>
+
+        <section id="petInfo">
+            <div class="category">
+                <h2>狗狗</h2>
+                <div class="category-options">
+                    <!-- 狗狗的选项保持不变 -->
+                </div>
+            </div>
+
+            <div class="category">
+                <h2>猫咪</h2>
+                <div class="category-options">
+                    <button class="category-option">
+                        <span class="category-option-icon"><i class="fas fa-cat"></i></span>
+                        暹罗猫
+                    </button>
+                    <button class="category-option">
+                        <span class="category-option-icon"><i class="fas fa-cat"></i></span>
+                        橘猫
+                    </button>
+                    <button class="category-option">
+                        <span class="category-option-icon"><i class="fas fa-cat"></i></span>
+                        英国短毛猫
+                    </button>
+                </div>
+            </div>
+
+            <div class="category">
+                <h2>鸟类</h2>
+                <div class="category-options">
+                    <button class="category-option">
+                        <span class="category-option-icon"><i class="fas fa-dove"></i></span>
+                        鹦鹉
+                    </button>
+                    <button class="category-option">
+                        <span class="category-option-icon"><i class="fas fa-dove"></i></span>
+                        金丝雀
+                    </button>
+                    <!-- 添加更多鸟类选项 -->
+                </div>
+            </div>
+
+            <div class="category">
+                <h2>兔子</h2>
+                <div class="category-options">
+                    <button class="category-option">
+                        <span class="category-option-icon"><i class="fas fa-rabbit"></i></span>
+                        荷兰侏儒兔
+                    </button>
+                    <button class="category-option">
+                        <span class="category-option-icon"><i class="fas fa-rabbit"></i></span>
+                        安哥拉兔
+                    </button>
+                    <!-- 添加更多兔子选项 -->
+                </div>
+            </div>
+
+            <div class="category">
+                <h2>鱼类</h2>
+                <div class="category-options">
+                    <button class="category-option">
+                        <span class="category-option-icon"><i class="fas fa-fish"></i></span>
+                        金鱼
+                    </button>
+                    <button class="category-option">
+                        <span class="category-option-icon"><i class="fas fa-fish"></i></span>
+                        热带鱼
+                    </button>
+                    <!-- 添加更多鱼类选项 -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="footer-content">
+            <div class="social-icons">
+                <a href="https://blog.csdn.net/weixin_54709604" target="_blank" title="CSDN"><i
+                        class="fab fa-cuttlefish"></i></a>
+                <a href="https://space.bilibili.com/35228793" target="_blank" title="哔哩哔哩"><i
+                        class="fab fa-bilibili"></i></a>
+                <a href="https://www.douyin.com/user/MS4wLjABAAAA3NK4NNlOwQD9COp4zJXJf7Mu8iU-Oqr42zdJMvvazsIa0JEAn_lomavbdDnLbxph?from_tab_name=main"
+                    target="_blank" title="抖音"><i class="fab fa-tiktok"></i></a>
+            </div>
+            <p>&copy; 2024 小菜鸡. 保留所有权利。</p>
+        </div>
+    </footer>
+
+    <script src="pet_script.js"></script>
+</body>
+
+</html>

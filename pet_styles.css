@@ -1,0 +1,381 @@
+:root {
+    --primary-color: #4a90e2;
+    --secondary-color: #f5f5f5;
+    --text-color: #333;
+    --accent-color: #ff6b6b;
+}
+
+body {
+    font-family: 'Noto Sans SC', sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+header {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 1rem 0;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.header-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+h1 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+nav ul {
+    padding: 0;
+    list-style-type: none;
+    display: flex;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 25px;
+    padding: 5px;
+}
+
+nav ul li {
+    margin: 0 5px;
+}
+
+nav ul li a {
+    color: white;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    padding: 8px 15px;
+    border-radius: 20px;
+}
+
+nav ul li a i {
+    margin-right: 5px;
+}
+
+nav ul li a:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+main {
+    padding: 40px 20px;
+    max-width: 800px;
+    margin: 0 auto;
+    flex: 1;
+}
+
+.search-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 30px;
+}
+
+#searchInput {
+    padding: 10px 15px;
+    width: 70%;
+    border: 2px solid var(--primary-color);
+    border-right: none;
+    border-radius: 25px 0 0 25px;
+    font-size: 1rem;
+    outline: none;
+}
+
+#searchButton {
+    padding: 10px 20px;
+    background-color: var(--primary-color);
+    color: white;
+    border: 2px solid var(--primary-color);
+    border-left: none;
+    border-radius: 0 25px 25px 0;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background-color 0.3s ease;
+}
+
+#searchButton:hover {
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+#petInfo {
+    background-color: white;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.1);
+}
+
+#petInfo h2 {
+    color: var(--primary-color);
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 10px;
+    margin-top: 0;
+}
+
+#petInfo h3 {
+    color: var(--accent-color);
+    margin-top: 20px;
+    margin-bottom: 10px;
+}
+
+#petInfo p {
+    font-size: 1.1rem;
+    line-height: 1.8;
+    margin-bottom: 20px;
+}
+
+footer {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 15px 0;
+    margin-top: auto;
+    position: relative;
+}
+
+.footer-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+    min-height: 60px; /* 确保页脚有足够的高度 */
+}
+
+footer p {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 500; /* 增加字体粗细 */
+    text-align: center;
+}
+
+.social-icons {
+    position: absolute;
+    bottom: 15px;
+    right: 20px;
+    display: flex;
+    gap: 15px;
+}
+
+.social-icons a {
+    color: white;
+    font-size: 1.2rem;
+    transition: color 0.3s ease;
+}
+
+.social-icons a:hover {
+    color: var(--accent-color);
+}
+
+@media (max-width: 768px) {
+    .header-content {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    nav ul {
+        margin-top: 20px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    nav ul li {
+        margin: 5px;
+    }
+
+    .footer-content {
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .social-icons {
+        margin-top: 10px;
+    }
+
+    .footer-content {
+        padding-bottom: 40px; /* 为移动设备上的社交图标留出空间 */
+    }
+
+    .social-icons {
+        position: static;
+        margin-top: 10px;
+    }
+}
+
+.back-button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    margin-top: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.back-button:before {
+    content: '\f060'; /* Font Awesome 左箭头图标 */
+    font-family: 'Font Awesome 5 Free';
+    font-weight: 900;
+    margin-right: 8px;
+}
+
+.back-button:hover {
+    background-color: var(--accent-color);
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+/* 修改 .pet-list 和其中的按钮样式 */
+.pet-list {
+    list-style-type: none;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.pet-list li {
+    flex-basis: calc(20% - 16px); /* 每行5个，考虑间隔 */
+    background-color: white;
+    border-radius: 10px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.pet-list a {
+    display: block;
+    padding: 15px;
+    text-decoration: none;
+    color: var(--text-color);
+    font-weight: 500;
+    text-align: center;
+    transition: all 0.3s ease;
+    background-color: white;
+    border: 2px solid var(--primary-color);
+    border-radius: 8px;
+}
+
+.pet-list a:hover {
+    background-color: var(--primary-color);
+    color: white;
+    transform: translateY(-3px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+/* 添加图标到按钮 */
+.pet-list a::before {
+    font-family: 'Font Awesome 5 Free';
+    font-weight: 900;
+    margin-right: 8px;
+}
+
+.pet-list[data-category="dogs"] a::before { content: '\f6d3'; } /* 狗图标 */
+.pet-list[data-category="cats"] a::before { content: '\f6be'; } /* 猫图标 */
+.pet-list[data-category="birds"] a::before { content: '\f535'; } /* 鸟图标 */
+.pet-list[data-category="rabbits"] a::before { content: '\f708'; } /* 兔子图标 */
+.pet-list[data-category="fish"] a::before { content: '\f578'; } /* 鱼图标 */
+
+/* 保持响应式设计 */
+@media (max-width: 1200px) {
+    .pet-list li {
+        flex-basis: calc(25% - 15px); /* 每行4个 */
+    }
+}
+
+@media (max-width: 900px) {
+    .pet-list li {
+        flex-basis: calc(33.333% - 13.333px); /* 每行3个 */
+    }
+}
+
+@media (max-width: 600px) {
+    .pet-list li {
+        flex-basis: calc(50% - 10px); /* 每行2个 */
+    }
+}
+
+@media (max-width: 400px) {
+    .pet-list li {
+        flex-basis: 100%; /* 每行1个 */
+    }
+}
+
+/* 统一分类选项的样式 */
+.category {
+    margin-bottom: 30px;
+}
+
+.category h2 {
+    color: var(--primary-color);
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 10px;
+    margin-top: 0;
+}
+
+.category-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.category-option {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border: 1px solid var(--primary-color);
+    border-radius: 20px;
+    background-color: #fff;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 14px;
+}
+
+.category-option:hover {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.category-option-icon {
+    margin-right: 8px;
+    font-size: 16px;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .category-options {
+        justify-content: center;
+    }
+    
+    .category-option {
+        flex-basis: calc(50% - 10px);
+    }
+}
+
+@media (max-width: 480px) {
+    .category-option {
+        flex-basis: 100%;
+    }
+}
