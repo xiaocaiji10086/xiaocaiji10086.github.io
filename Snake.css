@@ -660,6 +660,18 @@ a { color: inherit; text-decoration: none; }
   text-align: center;
 }
 
+.saved-note.is-warn {
+  border-color: rgba(255, 207, 92, 0.28);
+  background: rgba(255, 207, 92, 0.07);
+  color: #ffe3a1;
+}
+
+.saved-note.is-error {
+  border-color: rgba(255, 92, 108, 0.28);
+  background: rgba(255, 92, 108, 0.07);
+  color: #ffabb2;
+}
+
 /* ---------- Toast ---------- */
 
 .toast {
@@ -827,8 +839,65 @@ a { color: inherit; text-decoration: none; }
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--mint);
-  box-shadow: 0 0 8px var(--mint);
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.pill-button {
+  appearance: none;
+  justify-content: center;
+  min-width: 62px;
+  min-height: 26px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.pill-button:hover {
+  border-color: rgba(78, 240, 184, 0.4);
+  background: rgba(78, 240, 184, 0.12);
+}
+
+.pill-button:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 2px;
+}
+
+.pill-button.is-connecting {
+  color: var(--cyan);
+  border-color: rgba(86, 225, 255, 0.24);
+  background: rgba(86, 225, 255, 0.08);
+}
+
+.pill-button.is-syncing {
+  color: var(--gold);
+  border-color: rgba(255, 207, 92, 0.3);
+  background: rgba(255, 207, 92, 0.08);
+}
+
+.pill-button.is-syncing i {
+  animation: blink 0.9s ease-in-out infinite;
+}
+
+.pill-button.is-online {
+  color: #8be9bd;
+}
+
+.pill-button.is-pending {
+  color: var(--gold);
+  border-color: rgba(255, 207, 92, 0.3);
+  background: rgba(255, 207, 92, 0.08);
+}
+
+.pill-button.is-offline {
+  color: #ff9aa4;
+  border-color: rgba(255, 92, 108, 0.3);
+  background: rgba(255, 92, 108, 0.08);
+}
+
+.tabs-three .tab {
+  padding-left: 3px;
+  padding-right: 3px;
+  font-size: 11px;
 }
 
 .tabs {
@@ -965,6 +1034,44 @@ a { color: inherit; text-decoration: none; }
   font-size: 12.5px;
   font-weight: 600;
   color: #e3f5e6;
+}
+
+.rank-person {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.rank-person .rank-name {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.you-badge {
+  flex: none;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(198, 255, 74, 0.15);
+  border: 1px solid rgba(198, 255, 74, 0.3);
+  color: var(--lime);
+  font-family: var(--font-num);
+  font-size: 7.5px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.rank-row.is-pending .rank-score strong {
+  color: var(--gold);
+}
+
+.pending-flag {
+  color: var(--gold);
+}
+
+.rank-meta .pending-flag {
+  margin-left: 3px;
 }
 
 .rank-meta {
@@ -1388,6 +1495,8 @@ body.modal-open { overflow: hidden; }
   .save-block .micro { display: none; }
 
   .overlay-actions { margin-top: 11px; }
+
+  .tabs-three .tab { font-size: 10px; }
 
   .tip-line { margin-top: 11px; font-size: 9.5px; }
 

@@ -1,6 +1,6 @@
 /* ============================================================
    NEON SNAKE — 纯前端贪吃蛇
-   Canvas 渲染 + localStorage 历史计分
+   Canvas 渲染 + localStorage + 公共共享排行榜
    ============================================================ */
 
 (() => {
@@ -21,12 +21,24 @@
   const MAX_HISTORY = 50;     // 存储的历史对局条数
   const MAX_NAME = 12;
 
+  const SHARED = {
+    base: 'https://ntfy.sh',
+    defaultTopic: 'neon-snake-board-v1-7a3c9e5d',
+    pollMs: 12000,
+    snapshotEveryMs: 10 * 60 * 1000,
+    maxEntries: 100,
+    maxSnapshotEntries: 18,
+    maxMessageBytes: 3900,
+  };
+
   const STORE = {
     scores: 'neon-snake.scores.v1',
     history: 'neon-snake.history.v1',
     best: 'neon-snake.best.v1',
     name: 'neon-snake.name.v1',
     muted: 'neon-snake.muted.v1',
+    shared: 'neon-snake.shared.v1',
+    outbox: 'neon-snake.outbox.v1',
   };
 
   const DIRS = {
@@ -139,13 +151,17 @@
     confirmClearBtn: $('confirmClearBtn'),
     clearModal: $('clearModal'),
     helpModal: $('helpModal'),
+    sharedList: $('sharedList'),
     rankList: $('rankList'),
     historyList: $('historyList'),
     emptyState: $('emptyState'),
     emptyText: $('emptyText'),
     recordSummary: $('recordSummary'),
+    tabShared: $('tabShared'),
     tabRank: $('tabRank'),
     tabHistory: $('tabHistory'),
+    syncPill: $('syncPill'),
+    syncText: $('syncText'),
     toast: $('toast'),
     pauseBtn: $('pauseBtn'),
   };
@@ -179,8 +195,22 @@
 
   const view = { size: 0, cell: 0, dpr: 1 };
 
-  let activeTab = 'rank';
+  const sharedState = {
+    topic: '',
+    entries: [],
+    lastTime: 0,
+    syncedAt: 0,
+    snapshotAt: 0,
+    status: 'connecting',
+    error: '',
+    running: false,
+    again: false,
+    timer: 0,
+  };
+
+  let activeTab = 'shared';
   let highlightId = null;
+  let pendingNoteEntryId = '';
   let toastTimer = 0;
   let swipeStart = null;
   let lastFrame = typeof performance !== 'undefined' ? performance.now() : 0;
@@ -315,6 +345,268 @@
     return Math.max(bestStored, bestSaved);
   }
 
+  function formatClock(timestamp) {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return '--:--';
+    return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  }
+
+  /* ---------- 共享榜数据 ---------- */
+
+  function resolveTopic() {
+    try {
+      const custom = new URLSearchParams(window.location.search).get('board');
+      const clean = String(custom || '').trim();
+      if (/^[A-Za-z0-9_-]{3,64}$/.test(clean)) return clean;
+    } catch (error) {
+      /* 忽略无效参数 */
+    }
+    return SHARED.defaultTopic;
+  }
+
+  function sharedBaseUrl() {
+    return `${SHARED.base}/${encodeURIComponent(sharedState.topic)}`;
+  }
+
+  function sharedCacheKey() {
+    return `${STORE.shared}.${sharedState.topic}`;
+  }
+
+  function outboxKey() {
+    return `${STORE.outbox}.${sharedState.topic}`;
+  }
+
+  function sanitizeSharedEntry(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const id = typeof raw.id === 'string' ? raw.id.trim() : '';
+    if (!id || id.length > 64) return null;
+
+    const name = normalizeName(raw.name) || '无名玩家';
+    const score = Number(raw.score);
+    const level = Number(raw.level);
+    const length = Number(raw.length);
+    const date = typeof raw.date === 'string' ? raw.date : '';
+
+    if (!Number.isFinite(score) || score < 0 || score > 9999999) return null;
+    if (!Number.isFinite(level) || level < 1 || level > 999) return null;
+    if (!Number.isFinite(length) || length < 1 || length > 999) return null;
+    if (!date || Number.isNaN(new Date(date).getTime())) return null;
+
+    return {
+      id,
+      name,
+      score: Math.floor(score),
+      level: Math.floor(level),
+      length: Math.floor(length),
+      date,
+    };
+  }
+
+  function mergeSharedEntries(list) {
+    const map = new Map(sharedState.entries.map((entry) => [entry.id, entry]));
+    const source = Array.isArray(list) ? list : [];
+    for (const raw of source) {
+      const entry = sanitizeSharedEntry(raw);
+      if (!entry) continue;
+      const existing = map.get(entry.id);
+      if (existing && (
+        existing.name !== entry.name ||
+        existing.score !== entry.score ||
+        existing.level !== entry.level ||
+        existing.length !== entry.length ||
+        existing.date !== entry.date
+      )) {
+        continue;
+      }
+      map.set(entry.id, entry);
+    }
+    sharedState.entries = Array.from(map.values())
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      })
+      .slice(0, SHARED.maxEntries);
+  }
+
+  function loadSharedCache() {
+    const raw = storage.read(sharedCacheKey(), null);
+    if (!raw || raw.topic !== sharedState.topic) return;
+    if (Array.isArray(raw.entries)) {
+      sharedState.entries = [];
+      mergeSharedEntries(raw.entries);
+    }
+    sharedState.lastTime = Number(raw.lastTime) || 0;
+    sharedState.syncedAt = Number(raw.syncedAt) || 0;
+    sharedState.snapshotAt = Number(raw.snapshotAt) || 0;
+  }
+
+  function saveSharedCache() {
+    storage.write(sharedCacheKey(), {
+      topic: sharedState.topic,
+      entries: sharedState.entries,
+      lastTime: sharedState.lastTime,
+      syncedAt: sharedState.syncedAt,
+      snapshotAt: sharedState.snapshotAt,
+    });
+  }
+
+  function loadOutbox() {
+    const raw = storage.read(outboxKey(), []);
+    if (!Array.isArray(raw)) return [];
+    return raw.map(sanitizeSharedEntry).filter(Boolean).slice(-20);
+  }
+
+  function saveOutbox(list) {
+    const clean = (Array.isArray(list) ? list : []).slice(-20);
+    if (!clean.length) {
+      storage.remove(outboxKey());
+      return;
+    }
+    storage.write(outboxKey(), clean);
+  }
+
+  function queueSharedEntry(entry) {
+    const clean = sanitizeSharedEntry(entry);
+    if (!clean) return;
+    mergeSharedEntries([clean]);
+    const outbox = loadOutbox();
+    if (!outbox.some((item) => item.id === clean.id)) outbox.push(clean);
+    saveOutbox(outbox);
+    saveSharedCache();
+  }
+
+  function removeOutboxEntry(id) {
+    saveOutbox(loadOutbox().filter((item) => item.id !== id));
+  }
+
+  function localEntryIds() {
+    const ids = new Set(loadScores().map((entry) => entry.id));
+    for (const entry of loadOutbox()) ids.add(entry.id);
+    return ids;
+  }
+
+  function sharedRank(score) {
+    return sharedState.entries.filter((entry) => entry.score > score).length + 1;
+  }
+
+  const SYNC_LABELS = {
+    connecting: '连接中',
+    syncing: '同步中',
+    online: '已共享',
+    pending: '待同步',
+    offline: '离线',
+  };
+
+  function setSyncStatus(status, error = '') {
+    sharedState.status = status;
+    if (error) sharedState.error = error;
+    dom.syncText.textContent = SYNC_LABELS[status] || status;
+    dom.syncPill.className = `pill pill-button is-${status}`;
+
+    let title = '点击刷新共享榜';
+    if (status === 'offline') {
+      title = sharedState.error
+        ? `共享榜离线：${String(sharedState.error).slice(0, 60)}（点击重试）`
+        : '共享榜离线，点击重试';
+    } else if (status === 'pending') {
+      title = '有成绩等待同步，点击立即重试';
+    } else if (status === 'online' && sharedState.syncedAt) {
+      title = `上次同步 ${formatClock(sharedState.syncedAt)} · 点击刷新`;
+    }
+    dom.syncPill.title = title;
+    dom.syncPill.setAttribute('aria-label', title);
+    updateSummary();
+    updateEmptyState();
+  }
+
+  function updateSummary() {
+    if (!dom.recordSummary) return;
+    if (activeTab === 'shared') {
+      const pending = loadOutbox().length;
+      if (!sharedState.entries.length) {
+        dom.recordSummary.textContent = sharedState.status === 'offline'
+          ? '共享榜离线 · 等待重连'
+          : '暂无共享成绩';
+      } else if (pending) {
+        dom.recordSummary.textContent = `${sharedState.entries.length} 条 · 待同步 ${pending} 条`;
+      } else {
+        dom.recordSummary.textContent = `${sharedState.entries.length} 条 · 最高 ${sharedState.entries[0].score}`;
+      }
+    } else if (activeTab === 'rank') {
+      const scores = loadScores();
+      dom.recordSummary.textContent = `${scores.length} 条本机成绩 · 最高 ${state.best}`;
+    } else {
+      dom.recordSummary.textContent = `最近 ${loadHistory().length} 局`;
+    }
+  }
+
+  function createRankRow(entry, index, options = {}) {
+    const row = document.createElement('li');
+    row.className = `rank-row rank-${index + 1}`;
+    if (entry.id === highlightId) row.classList.add('is-new');
+    if (options.pending) row.classList.add('is-pending');
+    row.title = `${entry.name} · ${entry.score} 分`;
+
+    const no = document.createElement('span');
+    no.className = 'rank-no';
+    no.textContent = pad2(index + 1);
+
+    const info = document.createElement('div');
+    info.className = 'rank-info';
+
+    const person = document.createElement('div');
+    person.className = 'rank-person';
+    const name = document.createElement('span');
+    name.className = 'rank-name';
+    name.textContent = entry.name;
+    name.title = entry.name;
+    person.append(name);
+
+    if (options.you) {
+      const badge = document.createElement('em');
+      badge.className = 'you-badge';
+      badge.textContent = '你';
+      person.append(badge);
+    }
+
+    const meta = document.createElement('span');
+    meta.className = 'rank-meta';
+    meta.textContent = `Lv.${Number(entry.level) || 1} · ${formatDate(entry.date)}`;
+    if (options.pending) {
+      const flag = document.createElement('span');
+      flag.className = 'pending-flag';
+      flag.textContent = ' · 待同步';
+      meta.append(flag);
+    }
+
+    info.append(person, meta);
+
+    const score = document.createElement('span');
+    score.className = 'rank-score';
+    const strong = document.createElement('strong');
+    strong.textContent = entry.score;
+    const sub = document.createElement('span');
+    sub.textContent = `${Number(entry.length) || '—'} 节`;
+    score.append(strong, sub);
+
+    row.append(no, info, score);
+    return row;
+  }
+
+  function renderSharedList() {
+    dom.sharedList.replaceChildren();
+    const ownIds = localEntryIds();
+    const pendingIds = new Set(loadOutbox().map((entry) => entry.id));
+    sharedState.entries.slice(0, 10).forEach((entry, index) => {
+      dom.sharedList.append(
+        createRankRow(entry, index, {
+          you: ownIds.has(entry.id),
+          pending: pendingIds.has(entry.id),
+        })
+      );
+    });
+  }
+
   function renderRecords() {
     const scores = loadScores();
     const history = loadHistory();
@@ -324,36 +616,10 @@
 
     dom.rankList.replaceChildren();
     scores.slice(0, 10).forEach((entry, index) => {
-      const row = document.createElement('li');
-      row.className = `rank-row rank-${index + 1}`;
-      if (entry.id === highlightId) row.classList.add('is-new');
-
-      const no = document.createElement('span');
-      no.className = 'rank-no';
-      no.textContent = pad2(index + 1);
-
-      const info = document.createElement('div');
-      info.className = 'rank-info';
-      const name = document.createElement('span');
-      name.className = 'rank-name';
-      name.textContent = entry.name;
-      name.title = entry.name;
-      const meta = document.createElement('span');
-      meta.className = 'rank-meta';
-      meta.textContent = `Lv.${Number(entry.level) || 1} · ${formatDate(entry.date)}`;
-      info.append(name, meta);
-
-      const score = document.createElement('span');
-      score.className = 'rank-score';
-      const strong = document.createElement('strong');
-      strong.textContent = entry.score;
-      const sub = document.createElement('span');
-      sub.textContent = `${Number(entry.length) || '—'} 节`;
-      score.append(strong, sub);
-
-      row.append(no, info, score);
-      dom.rankList.append(row);
+      dom.rankList.append(createRankRow(entry, index));
     });
+
+    renderSharedList();
 
     dom.historyList.replaceChildren();
     history.slice(0, 15).forEach((entry) => {
@@ -381,31 +647,50 @@
       dom.historyList.append(row);
     });
 
-    dom.recordSummary.textContent = `${history.length} 局记录 · 最高 ${state.best}`;
+    updateSummary();
     updateEmptyState();
   }
 
   function updateEmptyState() {
-    const hasRecords = activeTab === 'rank' ? loadScores().length > 0 : loadHistory().length > 0;
+    const counts = {
+      shared: sharedState.entries.length,
+      rank: loadScores().length,
+      history: loadHistory().length,
+    };
+    const hasRecords = counts[activeTab] > 0;
     dom.emptyState.hidden = hasRecords;
-    if (!hasRecords) {
-      if (activeTab === 'rank') {
-        dom.emptyText.innerHTML = '还没有成绩<br><span>开一局，把名字留在这里</span>';
-      } else {
-        dom.emptyText.innerHTML = '还没有对局记录<br><span>每局结束都会自动记在这里</span>';
-      }
+    if (hasRecords) return;
+
+    if (activeTab === 'shared') {
+      dom.emptyText.innerHTML = sharedState.status === 'offline'
+        ? '共享榜暂时离线<br><span>检查网络后点击右上角状态重试</span>'
+        : '共享榜还没有成绩<br><span>保存一局，让所有人看到你</span>';
+    } else if (activeTab === 'rank') {
+      dom.emptyText.innerHTML = '本机还没有成绩<br><span>开一局，把名字留在这里</span>';
+    } else {
+      dom.emptyText.innerHTML = '还没有对局记录<br><span>每局结束都会自动记在这里</span>';
     }
   }
 
   function setTab(tab) {
-    activeTab = tab === 'history' ? 'history' : 'rank';
-    const isRank = activeTab === 'rank';
-    dom.tabRank.classList.toggle('is-active', isRank);
-    dom.tabHistory.classList.toggle('is-active', !isRank);
-    dom.tabRank.setAttribute('aria-selected', String(isRank));
-    dom.tabHistory.setAttribute('aria-selected', String(!isRank));
-    dom.rankList.hidden = !isRank;
-    dom.historyList.hidden = isRank;
+    activeTab = tab === 'rank' || tab === 'history' ? tab : 'shared';
+    const tabs = {
+      shared: dom.tabShared,
+      rank: dom.tabRank,
+      history: dom.tabHistory,
+    };
+
+    Object.entries(tabs).forEach(([key, button]) => {
+      const selected = key === activeTab;
+      button.classList.toggle('is-active', selected);
+      button.setAttribute('aria-selected', String(selected));
+    });
+
+    dom.sharedList.hidden = activeTab !== 'shared';
+    dom.rankList.hidden = activeTab !== 'rank';
+    dom.historyList.hidden = activeTab !== 'history';
+
+    updateSummary();
     updateEmptyState();
   }
 
@@ -425,7 +710,7 @@
 
     const previous = loadScores();
     const allScores = sortScores(previous.concat(entry));
-    const rank = allScores.findIndex((item) => item.id === entry.id) + 1;
+    const localRank = allScores.findIndex((item) => item.id === entry.id) + 1;
 
     const scoresSaved = storage.write(STORE.scores, allScores.slice(0, MAX_SCORES));
 
@@ -440,24 +725,250 @@
 
     state.saved = true;
     highlightId = entry.id;
+    queueSharedEntry(entry);
     renderRecords();
-    setTab('rank');
+    setTab('shared');
 
+    pendingNoteEntryId = entry.id;
     dom.saveBlock.hidden = true;
     dom.savedNote.hidden = false;
-    dom.savedNote.textContent =
-      rank <= 10
-        ? `成绩已保存 · 排行榜第 ${rank} 名`
-        : `成绩已保存 · 总排名第 ${rank} 名`;
+    dom.savedNote.className = 'saved-note is-warn';
+    dom.savedNote.textContent = `成绩已保存 · 本机第 ${localRank} 名，正在同步共享榜…`;
 
     if (!scoresSaved || !historySaved) {
       showToast('本地存储不可用，成绩仅在本次会话有效', 'gold');
     } else if (!options.silent) {
-      showToast('成绩已保存到本机排行榜', 'gold');
+      showToast('已保存到本机，正在同步共享榜', 'gold');
       sound.save();
     }
 
+    syncShared(false);
     return entry;
+  }
+
+  /* ---------- 共享榜同步 ---------- */
+
+  async function publishShared(payload) {
+    const body = JSON.stringify(payload);
+    if (new Blob([body]).size > SHARED.maxMessageBytes) {
+      throw new Error('共享消息过大');
+    }
+
+    const response = await fetch(sharedBaseUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body,
+      cache: 'no-store',
+      keepalive: true,
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return true;
+  }
+
+  async function pullShared(initial) {
+    const since = initial || !sharedState.lastTime
+      ? 'all'
+      : String(Math.max(0, sharedState.lastTime - 1));
+    const url = `${sharedBaseUrl()}/json?poll=1&since=${encodeURIComponent(since)}`;
+    const response = await fetch(url, { cache: 'no-store' });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const text = await response.text();
+    if (!text.trim()) return 0;
+
+    const lines = text.split('\n').filter(Boolean);
+    const start = Math.max(0, lines.length - 1200);
+    const batch = [];
+    let maxTime = sharedState.lastTime;
+
+    for (let i = start; i < lines.length; i += 1) {
+      let event;
+      try {
+        event = JSON.parse(lines[i]);
+      } catch (error) {
+        continue;
+      }
+
+      if (!event || event.event !== 'message' || typeof event.message !== 'string') continue;
+      const time = Number(event.time) || 0;
+      if (time > maxTime) maxTime = time;
+      if (event.message.length > 50000) continue;
+
+      let payload;
+      try {
+        payload = JSON.parse(event.message);
+      } catch (error) {
+        continue;
+      }
+      if (!payload || payload.v !== 1) continue;
+
+      if (payload.type === 'entry' && payload.entry) {
+        const entry = sanitizeSharedEntry(payload.entry);
+        if (entry) batch.push(entry);
+      } else if (payload.type === 'snapshot' && Array.isArray(payload.entries)) {
+        for (const raw of payload.entries.slice(0, SHARED.maxSnapshotEntries)) {
+          const entry = sanitizeSharedEntry(raw);
+          if (entry) batch.push(entry);
+        }
+      }
+    }
+
+    sharedState.lastTime = Math.max(sharedState.lastTime, maxTime);
+    if (batch.length) mergeSharedEntries(batch);
+    saveSharedCache();
+    return batch.length;
+  }
+
+  async function flushOutbox() {
+    const outbox = loadOutbox();
+    if (!outbox.length) return 0;
+
+    let sent = 0;
+    for (const entry of outbox) {
+      try {
+        await publishShared({
+          v: 1,
+          type: 'entry',
+          sentAt: Date.now(),
+          entry,
+        });
+        removeOutboxEntry(entry.id);
+        mergeSharedEntries([entry]);
+        saveSharedCache();
+        sent += 1;
+      } catch (error) {
+        sharedState.error = error && error.message ? error.message : '网络错误';
+        break;
+      }
+    }
+    return sent;
+  }
+
+  async function maybePublishSnapshot() {
+    if (!sharedState.entries.length) return false;
+    if (loadOutbox().length) return false;
+    if (Date.now() - sharedState.snapshotAt < SHARED.snapshotEveryMs) return false;
+
+    const entries = sharedState.entries.slice(0, SHARED.maxSnapshotEntries).map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      score: entry.score,
+      level: entry.level,
+      length: entry.length,
+      date: entry.date,
+    }));
+    if (entries.length < 3) return false;
+
+    const payload = { v: 1, type: 'snapshot', sentAt: Date.now(), entries };
+    let body = JSON.stringify(payload);
+    while (new Blob([body]).size > SHARED.maxMessageBytes && entries.length > 3) {
+      entries.pop();
+      payload.entries = entries;
+      body = JSON.stringify(payload);
+    }
+    if (new Blob([body]).size > SHARED.maxMessageBytes) return false;
+
+    try {
+      await publishShared(payload);
+      return true;
+    } catch (error) {
+      sharedState.error = error && error.message ? error.message : '网络错误';
+      return false;
+    } finally {
+      sharedState.snapshotAt = Date.now();
+      saveSharedCache();
+    }
+  }
+
+  function updateSavedNoteAfterSync() {
+    if (!pendingNoteEntryId || dom.savedNote.hidden) return;
+
+    const outbox = loadOutbox();
+    const pending = outbox.some((entry) => entry.id === pendingNoteEntryId);
+    const entry = sharedState.entries.find((item) => item.id === pendingNoteEntryId)
+      || outbox.find((item) => item.id === pendingNoteEntryId);
+    if (!entry) return;
+
+    if (pending) {
+      dom.savedNote.className = 'saved-note is-warn';
+      if (sharedState.status === 'offline') {
+        dom.savedNote.textContent = '成绩已保存到本机 · 共享榜离线，稍后自动重试';
+      } else if (sharedState.status === 'pending') {
+        dom.savedNote.textContent = '成绩已保存到本机 · 共享榜待同步，稍后自动重试';
+      } else {
+        dom.savedNote.textContent = '成绩已保存到本机 · 正在同步共享榜…';
+      }
+      return;
+    }
+
+    const rankIndex = sharedState.entries.findIndex((item) => item.id === entry.id);
+    const rank = rankIndex >= 0 ? rankIndex + 1 : sharedRank(entry.score);
+    dom.savedNote.className = 'saved-note';
+    dom.savedNote.textContent = rank <= 10
+      ? `成绩已保存 · 共享榜第 ${rank} 名`
+      : `成绩已保存 · 共享榜第 ${rank} 名（仅展示前 10）`;
+  }
+
+  async function doSync(initial) {
+    if (sharedState.running) {
+      sharedState.again = true;
+      return;
+    }
+
+    sharedState.running = true;
+    sharedState.error = '';
+    setSyncStatus('syncing');
+
+    try {
+      await pullShared(initial);
+      await flushOutbox();
+      if (!loadOutbox().length) {
+        await maybePublishSnapshot();
+      }
+
+      sharedState.syncedAt = Date.now();
+      saveSharedCache();
+      setSyncStatus(loadOutbox().length ? 'pending' : 'online');
+      renderRecords();
+      updateSavedNoteAfterSync();
+    } catch (error) {
+      sharedState.error = error && error.message ? error.message : '网络错误';
+      saveSharedCache();
+      setSyncStatus('offline');
+      renderRecords();
+      updateSavedNoteAfterSync();
+    } finally {
+      sharedState.running = false;
+      if (sharedState.again) {
+        sharedState.again = false;
+        window.setTimeout(() => syncShared(false), 300);
+      }
+    }
+  }
+
+  function syncShared(initial = false) {
+    return doSync(initial);
+  }
+
+  function startSharedPolling() {
+    window.clearInterval(sharedState.timer);
+    sharedState.timer = window.setInterval(() => {
+      if (document.hidden) return;
+      if (!navigator.onLine) {
+        setSyncStatus('offline');
+        return;
+      }
+      syncShared(false);
+    }, SHARED.pollMs);
+  }
+
+  function initShared() {
+    sharedState.topic = resolveTopic();
+    loadSharedCache();
+    mergeSharedEntries(loadOutbox());
+    setSyncStatus(navigator.onLine ? 'connecting' : 'offline');
+    startSharedPolling();
   }
 
   /* ---------- 覆盖层 / 提示 ---------- */
@@ -571,11 +1082,13 @@
     state.bestAtStart = loadBest();
     state.best = state.bestAtStart;
     highlightId = null;
+    pendingNoteEntryId = '';
 
     state.food = makeFood();
 
     dom.saveBlock.hidden = false;
     dom.savedNote.hidden = true;
+    dom.savedNote.className = 'saved-note';
     dom.playerName.disabled = false;
     dom.saveScoreBtn.disabled = false;
     dom.saveScoreBtn.textContent = '保存';
@@ -666,18 +1179,21 @@
     dom.recordBadge.hidden = !(state.score > 0 && state.score > state.bestAtStart);
 
     if (state.score > 0) {
-      const rank = loadScores().filter((entry) => entry.score > state.score).length + 1;
-      dom.overMsg.textContent = `${deathText} · 长度 ${state.snake.length} · 等级 ${state.level} · 预计第 ${rank} 名`;
+      const rank = sharedRank(state.score);
+      dom.overMsg.textContent = `${deathText} · 长度 ${state.snake.length} · 等级 ${state.level} · 共享榜预计第 ${rank} 名`;
       dom.saveBlock.hidden = false;
       dom.savedNote.hidden = true;
+      dom.savedNote.className = 'saved-note';
       dom.playerName.value = state.lastName || '';
       dom.playerName.disabled = false;
       dom.saveScoreBtn.disabled = false;
       dom.saveScoreBtn.textContent = '保存';
+      pendingNoteEntryId = '';
     } else {
       dom.overMsg.textContent = `${deathText} · 这次没得分，再来一局吧`;
       dom.saveBlock.hidden = true;
       dom.savedNote.hidden = true;
+      dom.savedNote.className = 'saved-note';
     }
 
     syncOverlays();
@@ -900,26 +1416,35 @@
       storage.remove(STORE.scores);
       storage.remove(STORE.history);
       storage.remove(STORE.best);
+      storage.remove(outboxKey());
       highlightId = null;
-      state.best = state.score > 0 ? state.score : 0;
+      pendingNoteEntryId = '';
+      state.best = 0;
       renderRecords();
       updateHud(false);
       if (state.phase === 'over' && state.saved) {
         dom.saveBlock.hidden = true;
         dom.savedNote.hidden = false;
-        dom.savedNote.textContent = '历史记录已清空 · 本局成绩不再保留';
+        dom.savedNote.className = 'saved-note is-warn';
+        dom.savedNote.textContent = '本机记录已清空 · 共享榜成绩仍保留';
         dom.recordBadge.hidden = true;
       }
       closeModals();
-      showToast('排行榜与历史记录已清空');
+      showToast('本机记录已清空 · 共享榜保留');
     });
 
     $$('.modal [data-close]').forEach((element) => {
       element.addEventListener('click', closeModals);
     });
 
+    dom.tabShared.addEventListener('click', () => setTab('shared'));
     dom.tabRank.addEventListener('click', () => setTab('rank'));
     dom.tabHistory.addEventListener('click', () => setTab('history'));
+
+    dom.syncPill.addEventListener('click', () => {
+      showToast('正在刷新共享榜…');
+      syncShared(true);
+    });
 
     $$('.dpad-btn[data-dir]').forEach((button) => {
       button.addEventListener('click', (event) => {
@@ -1032,6 +1557,23 @@
       if (state.phase === 'over' && !state.saved && state.score > 0) {
         saveScore({ silent: true });
       }
+    });
+
+    window.addEventListener('online', () => {
+      setSyncStatus('connecting');
+      syncShared(true);
+    });
+
+    window.addEventListener('offline', () => {
+      setSyncStatus('offline');
+    });
+
+    window.addEventListener('focus', () => {
+      if (!document.hidden && navigator.onLine) syncShared(false);
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && navigator.onLine) syncShared(false);
     });
 
     window.addEventListener('resize', resizeCanvas);
@@ -1443,10 +1985,11 @@
     state.lastName = typeof savedName === 'string' ? normalizeName(savedName) : '';
 
     state.best = loadBest();
+    initShared();
     resetGame();
     updateSoundButton();
     renderRecords();
-    setTab('rank');
+    setTab('shared');
     bindEvents();
     resizeCanvas();
     syncOverlays();
@@ -1457,6 +2000,13 @@
     }
 
     window.requestAnimationFrame(frame);
+
+    if (navigator.onLine) {
+      syncShared(true);
+      window.setTimeout(() => syncShared(false), 3000);
+    } else {
+      setSyncStatus('offline');
+    }
 
     if (new URLSearchParams(window.location.search).has('debug')) {
       window.__snakeDebug = {
@@ -1472,12 +2022,26 @@
             snake: state.snake.map((segment) => ({ x: segment.x, y: segment.y })),
             food: state.food ? { x: state.food.x, y: state.food.y } : null,
             bonus: state.bonus ? { x: state.bonus.x, y: state.bonus.y, life: state.bonus.life } : null,
+            shared: {
+              status: sharedState.status,
+              topic: sharedState.topic,
+              count: sharedState.entries.length,
+              outbox: loadOutbox().length,
+              syncedAt: sharedState.syncedAt,
+              top: sharedState.entries.slice(0, 5).map((entry) => ({
+                name: entry.name,
+                score: entry.score,
+                level: entry.level,
+                length: entry.length,
+              })),
+            },
           };
         },
         setDirection,
         start: startGame,
         end: endGame,
         save: () => saveScore({ silent: true }),
+        syncShared: () => syncShared(true),
       };
     }
   }

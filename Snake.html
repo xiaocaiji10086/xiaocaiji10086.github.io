@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#050a0c">
-  <meta name="description" content="纯前端霓虹风贪吃蛇小游戏：计分、等级提速、金色奖励果实，以及保存在本机的历史计分排行榜。">
-  <title>贪吃蛇 · NEON — 街机贪吃蛇</title>
+  <meta name="description" content="纯前端霓虹风贪吃蛇小游戏：计分、等级提速、金色奖励果实，以及跨设备共享的历史计分排行榜。">
+  <title>贪吃蛇 · NEON — 共享排行榜</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23c6ff4a'/%3E%3Cpath d='M18 22h18a7 7 0 0 1 0 14H28a7 7 0 0 0 0 14h18' fill='none' stroke='%2307110a' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="Snake.css">
 </head>
@@ -18,7 +18,7 @@
 
   <div class="app">
     <header class="topbar">
-      <a class="brand" href="./" aria-label="贪吃蛇 · NEON 首页">
+      <a class="brand" href="Snake.html" aria-label="贪吃蛇 · NEON 首页">
         <span class="brand-mark">
           <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
             <path d="M8 10h10a4 4 0 0 1 0 8h-4a4 4 0 0 0 0 8h10" stroke="#07120a" stroke-width="4.2" stroke-linecap="round"/>
@@ -109,12 +109,12 @@
                 </div>
                 <p class="overlay-text" id="overMsg"></p>
                 <div class="save-block" id="saveBlock">
-                  <label for="playerName">记入排行榜</label>
+                  <label for="playerName">留下昵称 · 同步共享榜</label>
                   <div class="input-row">
                     <input id="playerName" type="text" maxlength="12" placeholder="输入昵称" autocomplete="nickname" spellcheck="false">
                     <button class="btn btn-primary btn-sm" id="saveScoreBtn" type="button">保存</button>
                   </div>
-                  <p class="micro">不填则记为「无名玩家」</p>
+                  <p class="micro">昵称与分数会公开显示，请勿填写敏感信息</p>
                 </div>
                 <p class="saved-note" id="savedNote" hidden></p>
                 <div class="overlay-actions">
@@ -153,19 +153,23 @@
         <section class="panel board-panel" aria-labelledby="boardTitle">
           <div class="panel-head">
             <div>
-              <h2 id="boardTitle">排行榜</h2>
-              <p>本机历史成绩</p>
+              <h2 id="boardTitle">共享排行榜</h2>
+              <p>所有玩家 · 自动同步</p>
             </div>
-            <span class="pill"><i></i>LOCAL</span>
+            <button class="pill pill-button" id="syncPill" type="button" title="点击刷新共享榜">
+              <i></i><span id="syncText">连接中</span>
+            </button>
           </div>
 
-          <div class="tabs" role="tablist" aria-label="记录切换">
-            <button class="tab is-active" id="tabRank" type="button" data-tab="rank" role="tab" aria-selected="true">排行榜</button>
-            <button class="tab" id="tabHistory" type="button" data-tab="history" role="tab" aria-selected="false">最近记录</button>
+          <div class="tabs tabs-three" role="tablist" aria-label="记录切换">
+            <button class="tab is-active" id="tabShared" type="button" data-tab="shared" role="tab" aria-selected="true">共享榜</button>
+            <button class="tab" id="tabRank" type="button" data-tab="rank" role="tab" aria-selected="false">本机榜</button>
+            <button class="tab" id="tabHistory" type="button" data-tab="history" role="tab" aria-selected="false">最近</button>
           </div>
 
           <div class="list-wrap">
-            <ol class="rank-list" id="rankList"></ol>
+            <ol class="rank-list" id="sharedList"></ol>
+            <ol class="rank-list" id="rankList" hidden></ol>
             <ul class="history-list" id="historyList" hidden></ul>
             <div class="empty-state" id="emptyState" hidden>
               <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
@@ -174,13 +178,13 @@
                 <rect x="34" y="13" width="7" height="28" rx="2" fill="currentColor"/>
                 <path d="m8 21 9-8 8 4 13-11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".55"/>
               </svg>
-              <p id="emptyText">还没有成绩<br><span>开一局，把名字留在这里</span></p>
+              <p id="emptyText">共享榜还没有成绩<br><span>保存一局，让所有人看到你</span></p>
             </div>
           </div>
 
           <div class="panel-foot">
-            <span id="recordSummary">共 0 局记录</span>
-            <button class="link-btn" type="button" id="clearBtn">清空记录</button>
+            <span id="recordSummary">共享榜连接中…</span>
+            <button class="link-btn" type="button" id="clearBtn">清空本机</button>
           </div>
         </section>
 
@@ -202,14 +206,14 @@
               <div><strong>升级提速</strong><span>每吃 5 个果实升 1 级</span></div>
             </li>
           </ul>
-          <p class="storage-note">成绩自动保存在浏览器 localStorage 中，刷新页面不会丢失；清理浏览器数据会一并清除。</p>
+          <p class="storage-note">成绩保存在本机，并同步到公共共享榜；清理浏览器数据会丢失本机缓存，共享榜依赖网络。</p>
         </section>
       </aside>
     </main>
 
     <footer class="footer">
       <span>NEON SNAKE · 纯前端街机</span>
-      <span>Canvas + localStorage · 无需联网</span>
+      <span>Canvas + localStorage · 共享榜需联网</span>
     </footer>
   </div>
 
@@ -217,8 +221,8 @@
     <div class="modal-backdrop" data-close></div>
     <div class="modal-card">
       <span class="eyebrow danger">RESET</span>
-      <h2 id="clearTitle">清空所有记录？</h2>
-      <p>排行榜、最近对局和最高分会全部删除，此操作无法撤销。</p>
+      <h2 id="clearTitle">清空本机记录？</h2>
+      <p>本机排行榜、最近对局、最高分和待同步成绩会删除；已同步到共享榜的公开成绩不会受影响。</p>
       <div class="modal-actions">
         <button class="btn btn-ghost" type="button" data-close>取消</button>
         <button class="btn btn-danger" type="button" id="confirmClearBtn">确认清空</button>
@@ -238,7 +242,7 @@
         <div class="help-row"><span>手机操作</span><span>滑动棋盘 / 下方方向键</span></div>
         <div class="help-row"><span>结束条件</span><span>撞墙或咬到自己</span></div>
       </div>
-      <p class="help-note">每吃 5 个果实升 1 级并加速；金色果实只存在 8 秒，吃到 +50 分。游戏结束后可留下昵称，成绩会写进本机排行榜。</p>
+      <p class="help-note">每吃 5 个果实升 1 级并加速；金色果实只存在 8 秒，吃到 +50 分。游戏结束后可留下昵称，成绩会同时保存在本机并同步到公共共享榜；昵称和分数对所有人可见，请勿填写真实姓名等敏感信息。</p>
       <div class="modal-actions">
         <button class="btn btn-primary" type="button" data-close>知道了</button>
       </div>
