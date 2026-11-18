@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050a0c">
+  <meta name="description" content="纯前端霓虹风贪吃蛇小游戏：计分、等级提速、金色奖励果实，以及保存在本机的历史计分排行榜。">
+  <title>贪吃蛇 · NEON — 街机贪吃蛇</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23c6ff4a'/%3E%3Cpath d='M18 22h18a7 7 0 0 1 0 14H28a7 7 0 0 0 0 14h18' fill='none' stroke='%2307110a' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="Snake.css">
+</head>
+<body>
+  <div class="ambient" aria-hidden="true">
+    <span class="orb orb-lime"></span>
+    <span class="orb orb-cyan"></span>
+    <span class="grid-overlay"></span>
+  </div>
+
+  <div class="app">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="贪吃蛇 · NEON 首页">
+        <span class="brand-mark">
+          <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <path d="M8 10h10a4 4 0 0 1 0 8h-4a4 4 0 0 0 0 8h10" stroke="#07120a" stroke-width="4.2" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <span class="brand-title">NEON SNAKE</span>
+          <span class="brand-sub">贪吃蛇 · 街机模式</span>
+        </span>
+      </a>
+
+      <div class="top-actions">
+        <button class="icon-btn" type="button" id="soundBtn" aria-pressed="true" aria-label="关闭音效" title="关闭音效">
+          <svg class="icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 9.5v5h3.2L12 18.5v-13L7.2 9.5H4z"/>
+            <path d="M15.5 8.5a5 5 0 0 1 0 7"/>
+            <path d="M18 6a8.5 8.5 0 0 1 0 12"/>
+          </svg>
+          <svg class="icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 9.5v5h3.2L12 18.5v-13L7.2 9.5H4z"/>
+            <path d="m16 9.5 5 5M21 9.5l-5 5"/>
+          </svg>
+        </button>
+        <button class="icon-btn help-btn" type="button" id="helpBtn" aria-label="玩法说明" title="玩法说明">
+          <span aria-hidden="true">?</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="game-card" aria-label="贪吃蛇游戏">
+        <div class="scoreboard">
+          <div class="score-cell score-main">
+            <span class="score-label">得分<span class="label-en"> SCORE</span></span>
+            <strong class="score-value" id="score">0</strong>
+          </div>
+          <div class="score-cell">
+            <span class="score-label">最高分<span class="label-en"> BEST</span></span>
+            <strong class="score-value" id="best">0</strong>
+          </div>
+          <div class="score-cell">
+            <span class="score-label">等级<span class="label-en"> LEVEL</span></span>
+            <strong class="score-value" id="level">1</strong>
+          </div>
+          <div class="score-cell">
+            <span class="score-label">长度<span class="label-en"> LENGTH</span></span>
+            <strong class="score-value" id="length">4</strong>
+          </div>
+        </div>
+
+        <div class="stage">
+          <div class="canvas-shell" id="canvasShell">
+            <canvas id="game" width="600" height="600" aria-label="贪吃蛇棋盘">你的浏览器不支持 Canvas，请更换现代浏览器。</canvas>
+            <div class="scanlines" aria-hidden="true"></div>
+
+            <div class="overlay" id="startOverlay">
+              <div class="overlay-card start-card">
+                <span class="eyebrow"><i></i>INSERT COIN</span>
+                <h2>贪吃蛇 · 霓虹</h2>
+                <p class="overlay-text">吞掉果实，别撞墙，也别咬到自己。<br>每 5 个果实提速一级，金色果实限时出现。</p>
+                <div class="legend">
+                  <span><i class="chip chip-normal"></i>普通 +10</span>
+                  <span><i class="chip chip-bonus"></i>金色 +50</span>
+                </div>
+                <button class="btn btn-primary" id="startBtn" type="button">开始游戏 <span aria-hidden="true">→</span></button>
+                <p class="micro">方向键 / WASD 移动 · 空格暂停</p>
+              </div>
+            </div>
+
+            <div class="overlay is-hidden" id="pauseOverlay">
+              <div class="overlay-card compact">
+                <span class="eyebrow">PAUSED</span>
+                <h2>暂停中</h2>
+                <p class="overlay-text">喘口气，蛇不会跑。</p>
+                <button class="btn btn-primary" id="resumeBtn" type="button">继续游戏</button>
+                <button class="btn btn-ghost" id="pauseRestartBtn" type="button">重新开始</button>
+              </div>
+            </div>
+
+            <div class="overlay is-hidden" id="overOverlay">
+              <div class="overlay-card over-card">
+                <span class="eyebrow danger" id="overEyebrow">GAME OVER</span>
+                <h2 id="overTitle">游戏结束</h2>
+                <div class="final-score">
+                  <span>本局得分</span>
+                  <strong id="finalScore">0</strong>
+                  <em class="record-badge" id="recordBadge" hidden>新纪录</em>
+                </div>
+                <p class="overlay-text" id="overMsg"></p>
+                <div class="save-block" id="saveBlock">
+                  <label for="playerName">记入排行榜</label>
+                  <div class="input-row">
+                    <input id="playerName" type="text" maxlength="12" placeholder="输入昵称" autocomplete="nickname" spellcheck="false">
+                    <button class="btn btn-primary btn-sm" id="saveScoreBtn" type="button">保存</button>
+                  </div>
+                  <p class="micro">不填则记为「无名玩家」</p>
+                </div>
+                <p class="saved-note" id="savedNote" hidden></p>
+                <div class="overlay-actions">
+                  <button class="btn btn-ghost" id="restartBtn" type="button">再来一局</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="toast" id="toast" role="status" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <div class="touch-controls" aria-label="触屏方向键">
+          <button class="dpad-btn up" type="button" data-dir="up" aria-label="向上">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 6-6 6 6"/></svg>
+          </button>
+          <button class="dpad-btn left" type="button" data-dir="left" aria-label="向左">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>
+          </button>
+          <button class="dpad-btn center" type="button" id="pauseBtn" aria-label="暂停游戏">
+            <svg class="pause-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M9 7v10M15 7v10"/></svg>
+            <svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.5 18 12l-9 5.5z" fill="currentColor"/></svg>
+          </button>
+          <button class="dpad-btn right" type="button" data-dir="right" aria-label="向右">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 6 6 6-6 6"/></svg>
+          </button>
+          <button class="dpad-btn down" type="button" data-dir="down" aria-label="向下">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 10 6 6 6-6"/></svg>
+          </button>
+        </div>
+
+        <p class="tip-line"><span>方向键 / WASD</span> 移动 <b>·</b> <span>空格 / P</span> 暂停 <b>·</b> 金色果实 <span class="gold-text">+50</span></p>
+      </section>
+
+      <aside class="side">
+        <section class="panel board-panel" aria-labelledby="boardTitle">
+          <div class="panel-head">
+            <div>
+              <h2 id="boardTitle">排行榜</h2>
+              <p>本机历史成绩</p>
+            </div>
+            <span class="pill"><i></i>LOCAL</span>
+          </div>
+
+          <div class="tabs" role="tablist" aria-label="记录切换">
+            <button class="tab is-active" id="tabRank" type="button" data-tab="rank" role="tab" aria-selected="true">排行榜</button>
+            <button class="tab" id="tabHistory" type="button" data-tab="history" role="tab" aria-selected="false">最近记录</button>
+          </div>
+
+          <div class="list-wrap">
+            <ol class="rank-list" id="rankList"></ol>
+            <ul class="history-list" id="historyList" hidden></ul>
+            <div class="empty-state" id="emptyState" hidden>
+              <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+                <rect x="7" y="30" width="7" height="11" rx="2" fill="currentColor" opacity=".35"/>
+                <rect x="20.5" y="22" width="7" height="19" rx="2" fill="currentColor" opacity=".6"/>
+                <rect x="34" y="13" width="7" height="28" rx="2" fill="currentColor"/>
+                <path d="m8 21 9-8 8 4 13-11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".55"/>
+              </svg>
+              <p id="emptyText">还没有成绩<br><span>开一局，把名字留在这里</span></p>
+            </div>
+          </div>
+
+          <div class="panel-foot">
+            <span id="recordSummary">共 0 局记录</span>
+            <button class="link-btn" type="button" id="clearBtn">清空记录</button>
+          </div>
+        </section>
+
+        <section class="panel rules-panel" aria-labelledby="rulesTitle">
+          <h2 id="rulesTitle">计分规则</h2>
+          <ul class="rules">
+            <li>
+              <span class="rule-icon rule-normal"><i></i></span>
+              <div><strong>普通果实</strong><span>长度 +1</span></div>
+              <b>+10</b>
+            </li>
+            <li>
+              <span class="rule-icon rule-bonus"><i></i></span>
+              <div><strong>金色果实</strong><span>长度 +2 · 限时 8 秒</span></div>
+              <b>+50</b>
+            </li>
+            <li>
+              <span class="rule-icon rule-speed"><i>⚡</i></span>
+              <div><strong>升级提速</strong><span>每吃 5 个果实升 1 级</span></div>
+            </li>
+          </ul>
+          <p class="storage-note">成绩自动保存在浏览器 localStorage 中，刷新页面不会丢失；清理浏览器数据会一并清除。</p>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="footer">
+      <span>NEON SNAKE · 纯前端街机</span>
+      <span>Canvas + localStorage · 无需联网</span>
+    </footer>
+  </div>
+
+  <div class="modal" id="clearModal" role="dialog" aria-modal="true" aria-labelledby="clearTitle" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card">
+      <span class="eyebrow danger">RESET</span>
+      <h2 id="clearTitle">清空所有记录？</h2>
+      <p>排行榜、最近对局和最高分会全部删除，此操作无法撤销。</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" type="button" data-close>取消</button>
+        <button class="btn btn-danger" type="button" id="confirmClearBtn">确认清空</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card help-card">
+      <span class="eyebrow">HOW TO PLAY</span>
+      <h2 id="helpTitle">玩法说明</h2>
+      <div class="help-grid">
+        <div class="help-row"><span>移动</span><span><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> / <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span></div>
+        <div class="help-row"><span>暂停 / 继续</span><span><kbd>空格</kbd> / <kbd>P</kbd></span></div>
+        <div class="help-row"><span>开始 / 保存成绩</span><span><kbd>Enter</kbd></span></div>
+        <div class="help-row"><span>手机操作</span><span>滑动棋盘 / 下方方向键</span></div>
+        <div class="help-row"><span>结束条件</span><span>撞墙或咬到自己</span></div>
+      </div>
+      <p class="help-note">每吃 5 个果实升 1 级并加速；金色果实只存在 8 秒，吃到 +50 分。游戏结束后可留下昵称，成绩会写进本机排行榜。</p>
+      <div class="modal-actions">
+        <button class="btn btn-primary" type="button" data-close>知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="Snake.js"></script>
+</body>
+</html>
