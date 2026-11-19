@@ -18,6 +18,8 @@
 
 联机通过公共 MQTT 服务器 `broker.emqx.io` 的 WebSocket 服务完成，使用 `chinesechess/room/<房间号>` 主题和 QoS 1 消息。房间状态以 retained 消息保存在 Broker 上，因此刚加入的玩家也能立即拿到当前棋局。
 
+> 联机客户端已内置在 `ChineseChess.js` 中，不依赖额外的 `mqtt.min.js` 文件，部署到 GitHub Pages 时只需上传三个主文件（另加 README/预览图）。
+>
 > 这是公共测试 Broker，不需要账号，也不保证长期可用。房间号只用于匹配，不提供加密；请勿在房间中传输敏感信息。
 
 ### 人机对战
@@ -64,6 +66,8 @@ http://localhost:8080/ChineseChess.html
 
 联机模式需要能访问 `wss://broker.emqx.io:8084/mqtt`；本地人机和残局模式不依赖网络。
 
+> 如果已经部署过旧版本，请在 GitHub Pages 上强制刷新（Ctrl/Cmd + Shift + R）或清除缓存，确保浏览器加载到新的 `ChineseChess.js`。旧版本的联机依赖一个额外的 `vendor/mqtt.min.js`，现已移除。
+
 ## 操作
 
 - **点击棋子**：选中棋子，棋盘上会显示合法落点。
@@ -93,9 +97,7 @@ http://localhost:8080/ChineseChess.html
 chinese-chess/
 ├── ChineseChess.html      页面入口
 ├── ChineseChess.css       水墨/木纹界面与响应式布局
-├── ChineseChess.js        规则引擎、AI、Canvas 棋盘、联机逻辑
-├── vendor/
-│   └── mqtt.min.js        MQTT.js 浏览器构建（MIT）
+├── ChineseChess.js        规则引擎、AI、Canvas 棋盘、动画、内置 MQTT 客户端
 ├── preview.png            游戏预览
 └── README.md              本说明
 ```
@@ -103,8 +105,9 @@ chinese-chess/
 ## 技术说明
 
 - 棋盘使用 **Canvas** 绘制，包含木纹、楚河汉界、九宫斜线、兵炮位标记、上一步高亮、选中环、合法落点、将军提示和结果遮罩。
+- 走子带缓动位移动画：棋子会沿轻微弧线移动，马/炮/车的弧线与时长略有不同；吃子时被吃棋子会缩小淡出，落点有涟漪，移动中带残影。鼠标悬停时还会显示落点/棋子提示。
 - 棋子走法、将军检测、合法着法生成和 AI 搜索全部使用原生 JavaScript，无象棋引擎依赖。
-- 联机使用 **MQTT over WebSocket**：房主是棋局权威，访客发送走子请求，房主校验并发布新的 retained 状态；使用序号防止重复/过期状态覆盖新棋局。
+- 联机使用内置的轻量 **MQTT 3.1.1 over WebSocket** 客户端：房主是棋局权威，访客发送走子请求，房主校验并发布新的 retained 状态；使用序号防止重复/过期状态覆盖新棋局。
 - 音效由 Web Audio API 实时合成，无外部音频文件。
 - 昵称、音效开关和残局进度保存在 `localStorage`。
 - 页面适配桌面和手机宽度；手机端可完整浏览和点击操作，联机同样可用。
@@ -118,6 +121,5 @@ chinese-chess/
 
 ## 第三方
 
-- [MQTT.js](https://github.com/mqttjs/MQTT.js) — MIT License，已本地化到 `vendor/mqtt.min.js`。
 - 公共联机服务器：[EMQX Public Broker](https://broker.emqx.io/)（WebSocket 端口 8084）。
 - 字体使用系统自带的楷体/宋体/黑体回退，无外部字体请求。

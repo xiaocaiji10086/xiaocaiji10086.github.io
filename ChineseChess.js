@@ -190,6 +190,9 @@
     aiToken: 0,
     hintMove: null,
     hintText: '',
+    animation: null,
+    animRaf: 0,
+    hover: null,
   };
 
   const online = {
@@ -1001,13 +1004,29 @@
     }
 
     // 棋子
+    const anim = game.animation;
     for (let y = 0; y < ROWS; y += 1) {
       for (let x = 0; x < COLS; x += 1) {
         const piece = game.board[y][x];
         if (!piece) continue;
+        if (anim && x === anim.to.x && y === anim.to.y && piece === anim.piece) continue;
         const pos = displayPos(x, y);
         const selected = game.selected && game.selected.x === x && game.selected.y === y;
         drawPiece(pos.x, pos.y, piece, selected);
+      }
+    }
+
+    // 悬停提示
+    if (game.hover && !anim && game.phase !== 'over') {
+      const hover = game.hover;
+      const legalHover = game.selected && game.legal.some((m) => m.x === hover.x && m.y === hover.y);
+      const ownHover = game.board[hover.y][hover.x] && sideOf(game.board[hover.y][hover.x]) === game.turn;
+      if (legalHover) {
+        const pos = displayPos(hover.x, hover.y);
+        drawTargetRing(pos, 'rgba(226,197,128,0.96)', 0.49);
+      } else if (ownHover) {
+        const pos = displayPos(hover.x, hover.y);
+        drawTargetRing(pos, 'rgba(199,161,90,0.38)', 0.47);
       }
     }
 
@@ -1030,6 +1049,9 @@
         }
       }
     }
+
+    // 走子动画
+    if (anim) drawMoveAnimation(anim);
 
     // 被将军的将/帅
     if (game.check && game.phase !== 'over') {
@@ -1098,28 +1120,78 @@
     ctx.stroke();
   }
 
-  function drawPiece(dx, dy, piece, selected) {
+  function easeInOutCubic(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2;
+  }
+
+  function drawMoveAnimation(anim) {
+    const progress = clamp((performance.now() - anim.start) / anim.duration, 0, 1);
+    if (progress >= 1) return;
+    const t = easeInOutCubic(progress);
+    const from = displayPos(anim.from.x, anim.from.y);
+    const to = displayPos(anim.to.x, anim.to.y);
+
+    // 被吃棋子：缩小、淡出
+    if (anim.captured) {
+      const fade = clamp(1 - progress * 1.55, 0, 1);
+      if (fade > 0.01) {
+        drawPiece(to.x, to.y, anim.captured, false, 1 - 0.38 * (1 - fade), fade * 0.92);
+      }
+    }
+
+    // 残影
+    for (let i = 2; i >= 1; i -= 1) {
+      const trailT = Math.max(0, t - i * 0.07);
+      const trailX = from.x + (to.x - from.x) * trailT;
+      const trailY = from.y + (to.y - from.y) * trailT - Math.sin(Math.PI * trailT) * anim.arc;
+      drawPiece(trailX, trailY, anim.piece, false, 1, 0.07);
+    }
+
+    // 主棋子：轻微抬起 + 放大
+    const lift = Math.sin(Math.PI * t) * anim.arc;
+    const x = from.x + (to.x - from.x) * t;
+    const y = from.y + (to.y - from.y) * t - lift;
+    const scale = 1 + Math.sin(Math.PI * t) * 0.075;
+    drawPiece(x, y, anim.piece, false, scale, 1);
+
+    // 落点涟漪
+    if (progress > 0.5) {
+      const fade = (1 - progress) / 0.5;
+      const p = boardPoint(to.x, to.y);
+      ctx.save();
+      ctx.globalAlpha = clamp(fade, 0, 1) * 0.6;
+      ctx.strokeStyle = 'rgba(226,197,128,0.9)';
+      ctx.lineWidth = 0.024;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 0.42 + (1 - fade) * 0.3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawPiece(dx, dy, piece, selected, scale = 1, alpha = 1) {
     const p = boardPoint(dx, dy);
     const red = isRed(piece);
-    const radius = 0.415;
+    const radius = 0.415 * scale;
     const color = red ? '#a52b23' : '#20272a';
     const border = red ? '#9e2b25' : '#283033';
 
     ctx.save();
+    ctx.globalAlpha = alpha;
     if (selected) {
       ctx.shadowColor = 'rgba(199,161,90,0.8)';
-      ctx.shadowBlur = 0.25;
+      ctx.shadowBlur = 14;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 0.49, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, 0.49 * scale, 0, Math.PI * 2);
       ctx.strokeStyle = 'rgba(226,197,128,0.95)';
       ctx.lineWidth = 0.045;
       ctx.stroke();
     }
 
     ctx.shadowColor = 'rgba(50,28,10,0.42)';
-    ctx.shadowBlur = 0.14;
-    ctx.shadowOffsetY = 0.06;
-    const fill = ctx.createRadialGradient(p.x - 0.13, p.y - 0.15, 0.04, p.x, p.y, radius);
+    ctx.shadowBlur = 7;
+    ctx.shadowOffsetY = 2.5;
+    const fill = ctx.createRadialGradient(p.x - 0.13 * scale, p.y - 0.15 * scale, 0.04, p.x, p.y, radius);
     fill.addColorStop(0, '#faf1dd');
     fill.addColorStop(0.55, '#ecdcba');
     fill.addColorStop(1, '#ceb183');
@@ -1135,17 +1207,60 @@
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.arc(p.x, p.y, radius - 0.075, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, Math.max(0.05, radius - 0.075 * scale), 0, Math.PI * 2);
     ctx.strokeStyle = red ? 'rgba(158,43,35,0.42)' : 'rgba(39,48,51,0.48)';
     ctx.lineWidth = 0.012;
     ctx.stroke();
 
     ctx.fillStyle = color;
-    ctx.font = '700 0.54px "STKaiti","KaiTi","Kaiti SC","Songti SC",serif';
+    ctx.font = `700 ${0.54 * scale}px "STKaiti","KaiTi","Kaiti SC","Songti SC",serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(PIECE_NAMES[piece], p.x, p.y + 0.015);
+    ctx.fillText(PIECE_NAMES[piece], p.x, p.y + 0.015 * scale);
     ctx.restore();
+  }
+
+  function stopAnimation() {
+    if (game.animRaf) window.cancelAnimationFrame(game.animRaf);
+    game.animRaf = 0;
+    game.animation = null;
+  }
+
+  function startMoveAnimation(move) {
+    if (!move || !move.from || !move.to || !move.piece) return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      game.animation = null;
+      return;
+    }
+    const type = typeOf(move.piece);
+    const duration = type === 'h' ? 330 : (type === 'c' || type === 'r') ? 275 : 245;
+    const arc = type === 'h' ? 0.34 : type === 'c' ? 0.17 : type === 'r' ? 0.11 : 0.19;
+    game.animation = {
+      piece: move.piece,
+      captured: move.captured || null,
+      from: { x: move.from.x, y: move.from.y },
+      to: { x: move.to.x, y: move.to.y },
+      start: performance.now(),
+      duration,
+      arc,
+    };
+    if (game.animRaf) window.cancelAnimationFrame(game.animRaf);
+    const tick = () => {
+      if (!game.animation) {
+        game.animRaf = 0;
+        queueRender();
+        return;
+      }
+      if (performance.now() - game.animation.start >= game.animation.duration) {
+        game.animation = null;
+        game.animRaf = 0;
+        queueRender();
+        return;
+      }
+      drawBoard();
+      game.animRaf = window.requestAnimationFrame(tick);
+    };
+    game.animRaf = window.requestAnimationFrame(tick);
   }
 
   function eventToCell(event) {
@@ -1294,7 +1409,9 @@
     game.phase = 'idle';
     game.hintMove = null;
     game.hintText = '';
+    game.hover = null;
     game.aiToken += 1;
+    stopAnimation();
     hideResult();
     hideThinking();
     queueRender();
@@ -1617,9 +1734,30 @@
     updateGamePanel();
   }
 
+  function handleBoardHover(event) {
+    if (!game.mode || game.mode === 'menu' || game.phase === 'over' || game.animation) {
+      if (game.hover) {
+        game.hover = null;
+        queueRender();
+      }
+      return;
+    }
+    const cell = eventToCell(event);
+    if (!cell) {
+      if (game.hover) {
+        game.hover = null;
+        queueRender();
+      }
+      return;
+    }
+    if (game.hover && game.hover.x === cell.x && game.hover.y === cell.y) return;
+    game.hover = cell;
+    queueRender();
+  }
+
   function handleBoardClick(event) {
     if (!game.mode || game.mode === 'menu' || game.phase === 'over') return;
-    if (game.phase === 'thinking') return;
+    if (game.phase === 'thinking' || game.animation) return;
     const cell = eventToCell(event);
     if (!cell) return;
 
@@ -1684,6 +1822,7 @@
 
     game.turn = other(side);
     game.check = isInCheck(game.board, game.turn);
+    startMoveAnimation(game.lastMove);
     const replies = allLegalMoves(game.board, game.turn);
     let result = null;
     if (!replies.length) {
@@ -1746,7 +1885,12 @@
     }
     if (playerWon) audio.win();
     else audio.lose();
-    showResultOverlay(game.result);
+    const result = game.result;
+    const reveal = () => {
+      if (game.result === result) showResultOverlay(result);
+    };
+    if (game.animation) window.setTimeout(reveal, Math.max(180, game.animation.duration - 35));
+    else reveal();
   }
 
   function showResultOverlay(result) {
@@ -1802,6 +1946,9 @@
     showThinking(game.mode === 'ai' ? `AI 思考中 · ${LEVELS[game.aiLevel].name}` : 'AI 思考中');
     updateAll();
 
+    const animationRemaining = game.animation
+      ? Math.max(0, game.animation.duration - (performance.now() - game.animation.start))
+      : 0;
     window.setTimeout(() => {
       if (game.aiToken !== token || game.mode === 'menu' || game.phase !== 'thinking') return;
       const level = game.mode === 'puzzle'
@@ -1825,12 +1972,13 @@
         return;
       }
       performMove(move.from, move.to, { ai: true });
-    }, 220);
+    }, Math.max(220, animationRemaining + 60));
   }
 
   function undoMove() {
     if (game.mode === 'online' || !game.history.length) return;
     cancelAI();
+    stopAnimation();
     let plies = 1;
     const last = game.history[game.history.length - 1];
     if (last && last.side === 'b' && game.history.length >= 2) plies = 2;
@@ -1910,15 +2058,320 @@
     }
   }
 
+  /* ---------------- 轻量 MQTT 客户端（无外部依赖） ---------------- */
+
+  function mqttRemainingLength(length) {
+    const out = [];
+    let value = length;
+    do {
+      let byte = value % 128;
+      value = Math.floor(value / 128);
+      if (value > 0) byte |= 0x80;
+      out.push(byte);
+    } while (value > 0);
+    return new Uint8Array(out);
+  }
+
+  class MqttLite {
+    constructor(url, options = {}) {
+      this.url = url;
+      this.clientId = options.clientId || `cc_${Math.random().toString(16).slice(2, 10)}`;
+      this.keepalive = options.keepalive || 30;
+      this.reconnectPeriod = options.reconnectPeriod || 1800;
+      this.onConnect = null;
+      this.onMessage = null;
+      this.onClose = null;
+      this.onError = null;
+      this.ws = null;
+      this.buffer = new Uint8Array(0);
+      this.connected = false;
+      this.manualClose = false;
+      this.nextId = 1;
+      this.subscriptions = new Map();
+      this.connectTimer = null;
+      this.pingTimer = null;
+      this.reconnectTimer = null;
+      this.encoder = new TextEncoder();
+      this.decoder = new TextDecoder();
+      this.debug = [];
+    }
+
+    note(...args) {
+      this.debug.push(args.join(' '));
+      if (this.debug.length > 120) this.debug.shift();
+      if (window.__CC_DEBUG_MQTT) console.log('[mqtt]', ...args);
+    }
+
+    connect() {
+      this.manualClose = false;
+      this.clearTimers(false);
+      if (this.ws) {
+        try { this.ws.close(); } catch (error) { /* ignore */ }
+        this.ws = null;
+      }
+      let socket;
+      try {
+        socket = new WebSocket(this.url, ['mqtt']);
+      } catch (error) {
+        this.onError?.(error);
+        this.scheduleReconnect();
+        return;
+      }
+      this.ws = socket;
+      socket.binaryType = 'arraybuffer';
+
+      socket.onopen = () => {
+        this.note('ws open');
+        this.sendConnect();
+        this.connectTimer = window.setTimeout(() => {
+          if (this.connected) return;
+          this.note('connect timeout');
+          try { socket.close(); } catch (error) { /* ignore */ }
+        }, 8000);
+      };
+
+      socket.onmessage = (event) => this.handleData(event.data);
+
+      socket.onerror = (error) => {
+        this.note('ws error', error?.type || '');
+        this.onError?.(error);
+      };
+
+      socket.onclose = (event) => {
+        this.note('ws close', event.code, event.reason || '');
+        this.connected = false;
+        this.stopPing();
+        window.clearTimeout(this.connectTimer);
+        this.connectTimer = null;
+        if (this.ws === socket) this.ws = null;
+        if (this.manualClose) return;
+        this.onClose?.();
+        this.scheduleReconnect();
+      };
+    }
+
+    scheduleReconnect() {
+      if (this.manualClose) return;
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = window.setTimeout(() => {
+        if (!this.manualClose) this.connect();
+      }, this.reconnectPeriod);
+    }
+
+    clearTimers(includeReconnect = true) {
+      window.clearTimeout(this.connectTimer);
+      window.clearTimeout(this.pingTimer);
+      this.connectTimer = null;
+      this.pingTimer = null;
+      if (includeReconnect) {
+        window.clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+    }
+
+    sendConnect() {
+      const id = this.encoder.encode(this.clientId);
+      const body = new Uint8Array(12 + id.length);
+      body.set([0x00, 0x04, 0x4d, 0x51, 0x54, 0x54, 0x04, 0x02, 0x00, this.keepalive], 0);
+      body[10] = (id.length >> 8) & 0xff;
+      body[11] = id.length & 0xff;
+      body.set(id, 12);
+      this.sendPacket(0x10, body);
+    }
+
+    sendPacket(header, body) {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+      const payload = body instanceof Uint8Array ? body : new Uint8Array(body);
+      const length = mqttRemainingLength(payload.length);
+      const packet = new Uint8Array(1 + length.length + payload.length);
+      packet[0] = header;
+      packet.set(length, 1);
+      packet.set(payload, 1 + length.length);
+      try {
+        this.ws.send(packet);
+        return true;
+      } catch (error) {
+        this.onError?.(error);
+        return false;
+      }
+    }
+
+    subscribe(topic, callback) {
+      const id = this.nextId & 0xffff;
+      this.nextId = (this.nextId + 1) & 0xffff || 1;
+      const topicBytes = this.encoder.encode(topic);
+      const body = new Uint8Array(2 + 2 + topicBytes.length + 1);
+      body[0] = (id >> 8) & 0xff;
+      body[1] = id & 0xff;
+      body[2] = (topicBytes.length >> 8) & 0xff;
+      body[3] = topicBytes.length & 0xff;
+      body.set(topicBytes, 4);
+      body[4 + topicBytes.length] = 1;
+      this.subscriptions.set(id, callback);
+      this.note('SUBSCRIBE', id, topic, body.length);
+      return this.sendPacket(0x82, body);
+    }
+
+    publish(topic, message, options = {}) {
+      const qos = options.qos === 0 ? 0 : 1;
+      const retain = Boolean(options.retain);
+      const topicBytes = this.encoder.encode(topic);
+      const payload = this.encoder.encode(String(message));
+      const id = qos > 0 ? (this.nextId & 0xffff) : 0;
+      if (qos > 0) this.nextId = (this.nextId + 1) & 0xffff || 1;
+
+      const body = new Uint8Array(2 + topicBytes.length + (qos > 0 ? 2 : 0) + payload.length);
+      let offset = 0;
+      body[offset] = (topicBytes.length >> 8) & 0xff;
+      body[offset + 1] = topicBytes.length & 0xff;
+      offset += 2;
+      body.set(topicBytes, offset);
+      offset += topicBytes.length;
+      if (qos > 0) {
+        body[offset] = (id >> 8) & 0xff;
+        body[offset + 1] = id & 0xff;
+        offset += 2;
+      }
+      body.set(payload, offset);
+      const header = 0x30 | (qos << 1) | (retain ? 1 : 0);
+      this.note('PUBLISH', topic, payload.length, qos, retain);
+      return this.sendPacket(header, body);
+    }
+
+    handleData(data) {
+      let incoming = null;
+      if (data instanceof ArrayBuffer) incoming = new Uint8Array(data);
+      else if (data && data.buffer instanceof ArrayBuffer) incoming = new Uint8Array(data.buffer);
+      if (!incoming) return;
+
+      const merged = new Uint8Array(this.buffer.length + incoming.length);
+      merged.set(this.buffer, 0);
+      merged.set(incoming, this.buffer.length);
+      this.buffer = merged;
+
+      let offset = 0;
+      while (offset < this.buffer.length) {
+        const packet = this.readPacket(offset);
+        if (!packet) break;
+        offset += packet.total;
+        this.handlePacket(packet);
+      }
+      if (offset > 0) this.buffer = this.buffer.slice(offset);
+    }
+
+    readPacket(start) {
+      const buffer = this.buffer;
+      if (start + 1 >= buffer.length) return null;
+      let multiplier = 1;
+      let remaining = 0;
+      let index = start + 1;
+      let byte;
+      do {
+        if (index >= buffer.length) return null;
+        byte = buffer[index];
+        index += 1;
+        remaining += (byte & 0x7f) * multiplier;
+        multiplier *= 128;
+        if (multiplier > 128 * 128 * 128) return null;
+      } while (byte & 0x80);
+      if (index + remaining > buffer.length) return null;
+      return {
+        type: buffer[start] >> 4,
+        flags: buffer[start] & 0x0f,
+        body: buffer.slice(index, index + remaining),
+        total: index - start + remaining,
+      };
+    }
+
+    handlePacket(packet) {
+      const body = packet.body;
+      if (packet.type === 2) {
+        if (body.length < 2) return;
+        this.note('CONNACK', body[1]);
+        if (body[1] !== 0) {
+          this.onError?.(new Error(`MQTT CONNACK ${body[1]}`));
+          try { this.ws?.close(); } catch (error) { /* ignore */ }
+          return;
+        }
+        this.connected = true;
+        window.clearTimeout(this.connectTimer);
+        this.connectTimer = null;
+        this.startPing();
+        this.onConnect?.();
+        return;
+      }
+
+      if (packet.type === 3) {
+        if (body.length < 2) return;
+        const topicLength = (body[0] << 8) | body[1];
+        let offset = 2;
+        if (offset + topicLength > body.length) return;
+        const topic = this.decoder.decode(body.slice(offset, offset + topicLength));
+        offset += topicLength;
+        const qos = (packet.flags >> 1) & 0x03;
+        let packetId = 0;
+        if (qos > 0) {
+          if (offset + 2 > body.length) return;
+          packetId = (body[offset] << 8) | body[offset + 1];
+          offset += 2;
+        }
+        if (qos === 1) {
+          this.sendPacket(0x40, new Uint8Array([(packetId >> 8) & 0xff, packetId & 0xff]));
+        }
+        const payload = this.decoder.decode(body.slice(offset));
+        this.onMessage?.(topic, payload, { qos, retain: Boolean(packet.flags & 1) });
+        return;
+      }
+
+      if (packet.type === 9) {
+        if (body.length < 2) return;
+        const id = (body[0] << 8) | body[1];
+        this.note('SUBACK', id, body[2]);
+        const callback = this.subscriptions.get(id);
+        if (callback) {
+          this.subscriptions.delete(id);
+          callback(null);
+        }
+      }
+    }
+
+    startPing() {
+      this.stopPing();
+      const interval = Math.max(5000, this.keepalive * 500);
+      this.pingTimer = window.setInterval(() => {
+        if (this.connected) this.sendPacket(0xc0, new Uint8Array(0));
+      }, interval);
+    }
+
+    stopPing() {
+      window.clearInterval(this.pingTimer);
+      this.pingTimer = null;
+    }
+
+    end() {
+      this.manualClose = true;
+      this.clearTimers(true);
+      try { this.sendPacket(0xe0, new Uint8Array(0)); } catch (error) { /* ignore */ }
+      try { this.ws?.close(); } catch (error) { /* ignore */ }
+      this.ws = null;
+      this.connected = false;
+    }
+  }
+
   /* ---------------- 联机房间 ---------------- */
 
   function getClientId() {
-    let id = safeGet(STORE.client, '');
-    if (typeof id !== 'string' || !id) {
-      id = uid();
-      safeSet(STORE.client, id);
+    // 每个标签页独立：同一浏览器开两个标签页时，房主和访客不会共用身份。
+    try {
+      let id = sessionStorage.getItem(STORE.client);
+      if (!id) {
+        id = uid();
+        sessionStorage.setItem(STORE.client, id);
+      }
+      return id;
+    } catch (error) {
+      return uid();
     }
-    return id;
   }
 
   function sanitizeName(value) {
@@ -2155,37 +2608,23 @@
 
   function connectRelay() {
     if (!online.active || !online.code) return;
-    if (typeof mqtt === 'undefined') {
-      setConnection('联机组件未加载', 'offline');
-      toast('联机组件加载失败，请刷新页面');
-      return;
-    }
     if (online.mqtt) {
-      try { online.mqtt.end(true); } catch (error) { /* ignore */ }
+      try { online.mqtt.end(); } catch (error) { /* ignore */ }
       online.mqtt = null;
     }
     online.wsReady = false;
     const cleanId = `cc_${String(online.clientId).replace(/[^a-zA-Z0-9]/g, '').slice(0, 10)}_${Math.random().toString(16).slice(2, 8)}`;
-    let client;
-    try {
-      client = mqtt.connect(RELAY_MQTT, {
-        clientId: cleanId,
-        clean: true,
-        reconnectPeriod: 1800,
-        connectTimeout: 8000,
-        protocolVersion: 4,
-        keepalive: 30,
-      });
-    } catch (error) {
-      setConnection('联机服务器连接失败', 'offline');
-      return;
-    }
+    const client = new MqttLite(RELAY_MQTT, {
+      clientId: cleanId,
+      keepalive: 30,
+      reconnectPeriod: 1800,
+    });
     online.mqtt = client;
 
-    client.on('connect', () => {
+    client.onConnect = () => {
       if (online.mqtt !== client) return;
       online.wsReady = true;
-      client.subscribe(relayTopic(), { qos: 1 }, (error) => {
+      client.subscribe(relayTopic(), (error) => {
         if (error || online.mqtt !== client) return;
         updateConnectionUI();
         flushOutbox();
@@ -2196,40 +2635,30 @@
         }
         updateGamePanel();
       });
-    });
+    };
 
-    client.on('message', (topic, payload) => {
+    client.onMessage = (topic, payload) => {
       if (online.mqtt !== client || topic !== relayTopic()) return;
       let message;
-      try { message = JSON.parse(payload.toString()); } catch (error) { return; }
+      try { message = JSON.parse(payload); } catch (error) { return; }
       handleRelayMessage(message);
-    });
+    };
 
-    client.on('reconnect', () => {
-      if (online.mqtt !== client) return;
-      online.wsReady = false;
-      updateConnectionUI();
-      updateGamePanel();
-    });
-
-    client.on('close', () => {
+    client.onClose = () => {
       if (online.mqtt !== client) return;
       online.wsReady = false;
       if (!online.active) return;
       setConnection(`房间 ${online.code} · 重连中`, 'offline');
+      updateConnectionUI();
       updateGamePanel();
-    });
+    };
 
-    client.on('offline', () => {
-      if (online.mqtt !== client) return;
-      online.wsReady = false;
-      if (online.active) setConnection(`房间 ${online.code} · 等待网络`, 'offline');
-    });
-
-    client.on('error', () => {
+    client.onError = () => {
       if (online.mqtt !== client) return;
       setConnection(`房间 ${online.code} · 连接异常`, 'offline');
-    });
+    };
+
+    client.connect();
   }
 
   function startRelayTimers() {
@@ -2446,7 +2875,17 @@
     game.selected = null;
     game.legal = [];
     game.history = [];
-    game.lastMove = state.lastMove || null;
+    const previousMove = game.lastMove;
+    const incomingMove = state.lastMove && state.lastMove.from && state.lastMove.to ? state.lastMove : null;
+    const hasNewMove = Boolean(incomingMove && (
+      !previousMove
+      || previousMove.from.x !== incomingMove.from.x
+      || previousMove.from.y !== incomingMove.from.y
+      || previousMove.to.x !== incomingMove.to.x
+      || previousMove.to.y !== incomingMove.to.y
+      || previousMove.piece !== incomingMove.piece
+    ));
+    game.lastMove = incomingMove;
     game.log = Array.isArray(state.log) ? state.log.slice(-80) : [];
     game.captured = {
       r: Array.isArray(state.captured?.r) ? state.captured.r.slice() : [],
@@ -2457,6 +2896,8 @@
     game.phase = game.result ? 'over' : 'playing';
     game.hintMove = null;
     game.hintText = '';
+    if (hasNewMove) startMoveAnimation(incomingMove);
+    else if (!incomingMove) stopAnimation();
     online.seq = Number(state.seq) || 0;
     online.movePending = false;
     window.clearTimeout(online.activeTimer);
@@ -2597,7 +3038,7 @@
     stopFallbackPolling();
     if (client) {
       window.setTimeout(() => {
-        try { client.end(true); } catch (error) { /* ignore */ }
+        try { client.end(); } catch (error) { /* ignore */ }
       }, 350);
     }
     resetOnlineFields();
@@ -2706,6 +3147,12 @@
     dom.backBtn.addEventListener('click', backToMenu);
 
     dom.canvas.addEventListener('click', handleBoardClick);
+    dom.canvas.addEventListener('pointermove', handleBoardHover);
+    dom.canvas.addEventListener('pointerleave', () => {
+      if (!game.hover) return;
+      game.hover = null;
+      queueRender();
+    });
     dom.canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 
     dom.soundBtn.addEventListener('click', () => {
@@ -2814,6 +3261,12 @@
           log: game.log.slice(),
           selected: game.selected,
           legal: game.legal.slice(),
+          animation: game.animation ? {
+            piece: game.animation.piece,
+            from: game.animation.from,
+            to: game.animation.to,
+            progress: Math.min(1, (performance.now() - game.animation.start) / game.animation.duration),
+          } : null,
           online: {
             active: online.active,
             role: online.role,
@@ -2907,6 +3360,12 @@
         finish: (winner = 'r', reason = '测试') => { finishGame(winner, reason); return true; },
         board: () => game.board.map((row) => row.slice()),
         onlineState: () => online.state,
+        mqttDebug: () => online.mqtt ? {
+          connected: online.mqtt.connected,
+          ready: online.mqtt.ws?.readyState,
+          debug: online.mqtt.debug.slice(-30),
+          buffer: online.mqtt.buffer.length,
+        } : null,
       };
     }
   }
