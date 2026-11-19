@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1016">
+  <meta name="description" content="中国象棋：支持联机房间、四档人机对战与残局挑战的纯前端象棋游戏。">
+  <title>中国象棋 · Chinese Chess</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='29' fill='%23e9d6b3' stroke='%239d2b24' stroke-width='4'/%3E%3Ctext x='32' y='45' text-anchor='middle' font-size='36' font-family='KaiTi,serif' fill='%239d2b24'%3E%E6%A3%8B%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="ChineseChess.css">
+</head>
+<body>
+  <div class="ambient" aria-hidden="true">
+    <span class="ink-orb ink-1"></span>
+    <span class="ink-orb ink-2"></span>
+    <span class="seal-ghost">棋</span>
+    <span class="grain"></span>
+  </div>
+
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-seal">棋</span>
+        <div class="brand-copy">
+          <h1>中国象棋</h1>
+          <p>CHINESE CHESS · 楚河汉界</p>
+        </div>
+      </div>
+
+      <div class="top-actions">
+        <span class="connection-pill" id="connectionPill"><i></i><span id="connectionText">本地对局</span></span>
+        <button class="icon-btn" type="button" id="soundBtn" aria-label="切换音效" title="音效开关">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 9.5v5h3.2L12 18.5v-13L7.2 9.5H4z"/>
+            <path id="soundWave" d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12"/>
+          </svg>
+        </button>
+        <button class="icon-btn" type="button" id="helpBtn" aria-label="规则说明" title="规则说明">?</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="board-column" aria-label="棋盘">
+        <div class="side-tag top" id="topSideTag"><span class="side-dot black"></span><b>黑方</b><em>BLACK</em><span class="side-state" id="topSideState"></span></div>
+
+        <div class="board-frame" id="boardFrame">
+          <div class="frame-corner tl"></div>
+          <div class="frame-corner tr"></div>
+          <div class="frame-corner bl"></div>
+          <div class="frame-corner br"></div>
+          <canvas id="boardCanvas" width="760" height="840" aria-label="中国象棋棋盘"></canvas>
+
+          <div class="board-overlay" id="boardOverlay" hidden>
+            <div class="result-card">
+              <span class="result-kicker" id="resultKicker">GAME OVER</span>
+              <h2 id="resultTitle">红方胜</h2>
+              <p id="resultText">将死</p>
+              <div class="result-actions" id="resultActions"></div>
+            </div>
+          </div>
+
+          <div class="thinking" id="thinking" hidden><i></i><span id="thinkingText">AI 思考中</span></div>
+        </div>
+
+        <div class="side-tag bottom" id="bottomSideTag"><span class="side-dot red"></span><b>红方</b><em>RED</em><span class="side-state" id="bottomSideState"></span></div>
+
+        <div class="board-status">
+          <span id="lastMoveText">红方先行 · 点击棋子开始</span>
+          <span class="check-flag" id="checkFlag" hidden><i></i>将军</span>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <div class="panel-head">
+          <div>
+            <span class="panel-kicker" id="panelKicker">WELCOME</span>
+            <h2 id="panelTitle">选择对局模式</h2>
+          </div>
+          <span class="status-pill" id="statusPill"><i></i><span id="statusPillText">待机</span></span>
+        </div>
+
+        <div class="panel-scroll">
+          <!-- 模式选择 -->
+          <div class="panel-body" id="menuPanel">
+            <p class="panel-lead">楚河汉界，方寸之间。选择一种方式开始对局。</p>
+
+            <button class="mode-card" type="button" data-mode="online">
+              <span class="mode-icon online">联</span>
+              <span class="mode-copy">
+                <strong>联机对战</strong>
+                <em>创建 6 位房间号，或输入房间号加入好友对局</em>
+              </span>
+              <span class="mode-arrow">→</span>
+            </button>
+
+            <button class="mode-card" type="button" data-mode="ai">
+              <span class="mode-icon ai">人</span>
+              <span class="mode-copy">
+                <strong>人机对战</strong>
+                <em>简单 / 一般 / 困难 / 地狱四档 AI 棋力</em>
+              </span>
+              <span class="mode-arrow">→</span>
+            </button>
+
+            <button class="mode-card" type="button" data-mode="puzzle">
+              <span class="mode-icon puzzle">残</span>
+              <span class="mode-copy">
+                <strong>残局挑战</strong>
+                <em>五道残局关卡，红方先行，步步为营</em>
+              </span>
+              <span class="mode-arrow">→</span>
+            </button>
+
+            <div class="menu-note">
+              <span class="rule-dot"></span>
+              <p>联机对战使用公共实时中继，无需注册；房间号只用于匹配棋局，请勿用于敏感信息。</p>
+            </div>
+          </div>
+
+          <!-- 人机设置 -->
+          <div class="panel-body" id="aiPanel" hidden>
+            <p class="panel-lead">你执红先行，AI 执黑。选择棋力后开始对局。</p>
+            <div class="level-grid" id="levelGrid">
+              <button class="level-card" type="button" data-level="easy">
+                <span class="level-name">简单</span><span class="level-desc">刚学走子，会漏看吃子</span><i></i>
+              </button>
+              <button class="level-card is-active" type="button" data-level="normal">
+                <span class="level-name">一般</span><span class="level-desc">会算几步，适合休闲</span><i></i>
+              </button>
+              <button class="level-card" type="button" data-level="hard">
+                <span class="level-name">困难</span><span class="level-desc">重视子力与攻势</span><i></i>
+              </button>
+              <button class="level-card" type="button" data-level="hell">
+                <span class="level-name">地狱</span><span class="level-desc">深度搜索，认真对待</span><i></i>
+              </button>
+            </div>
+            <div class="level-note" id="levelNote">一般：搜索 3 层，均衡稳健。</div>
+            <button class="btn-primary full" type="button" id="aiStartBtn">开始对局</button>
+            <button class="btn-ghost full" type="button" data-back>返回模式选择</button>
+          </div>
+
+          <!-- 联机设置 -->
+          <div class="panel-body" id="onlinePanel" hidden>
+            <div id="onlineSetup">
+              <p class="panel-lead">你和好友需要打开同一个页面，使用同一个房间号即可对弈。</p>
+
+              <label class="field-label" for="onlineName">你的昵称</label>
+              <input class="text-input" id="onlineName" maxlength="10" autocomplete="nickname" placeholder="棋友" value="棋友">
+
+              <div class="seg-tabs" role="tablist" aria-label="联机方式">
+                <button class="seg-tab is-active" type="button" data-online-tab="create" role="tab" aria-selected="true">创建房间</button>
+                <button class="seg-tab" type="button" data-online-tab="join" role="tab" aria-selected="false">进入房间</button>
+              </div>
+
+              <div id="createPane">
+                <p class="field-help">创建后会生成一个 6 位数字房间号。你执红先行，等待好友加入。</p>
+                <button class="btn-primary full" type="button" id="createRoomBtn">生成房间号</button>
+              </div>
+
+              <div id="joinPane" hidden>
+                <label class="field-label" for="roomInput">6 位房间号</label>
+                <input class="text-input room-input" id="roomInput" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="例如 482913">
+                <button class="btn-primary full" type="button" id="joinRoomBtn">进入房间</button>
+                <p class="field-help">加入后你执黑。请确认房主已经创建房间并保持页面打开。</p>
+              </div>
+
+              <p class="form-error" id="onlineError" hidden></p>
+              <button class="btn-ghost full" type="button" data-back>返回模式选择</button>
+            </div>
+
+            <div id="onlineRoom" hidden>
+              <span class="room-kicker">ROOM CODE</span>
+              <div class="room-code" id="roomCode">000000</div>
+              <div class="room-actions">
+                <button class="btn-outline" type="button" id="copyCodeBtn">复制房间号</button>
+                <button class="btn-outline" type="button" id="copyLinkBtn">复制邀请链接</button>
+              </div>
+              <div class="room-state">
+                <span class="pulse-dot"></span>
+                <p id="roomStatusText">等待好友加入…</p>
+              </div>
+              <div class="room-players" id="roomPlayers"></div>
+              <p class="field-help">把房间号发给好友，让对方在「进入房间」中输入即可。联机期间请保持本页面打开。</p>
+              <button class="btn-ghost full" type="button" id="leaveRoomBtn">关闭房间</button>
+            </div>
+          </div>
+
+          <!-- 残局列表 -->
+          <div class="panel-body" id="puzzlePanel" hidden>
+            <p class="panel-lead">红方先行。目标是将死黑方。每一步都可以悔棋重来。</p>
+            <div class="puzzle-list" id="puzzleList"></div>
+            <button class="btn-ghost full" type="button" data-back>返回模式选择</button>
+          </div>
+
+          <!-- 对局面板 -->
+          <div class="panel-body game-body" id="gamePanel" hidden>
+            <div class="game-room-bar" id="gameRoomBar" hidden>
+              <span>房间 <b id="gameRoomCode">------</b></span>
+              <span class="game-opponent" id="gameOpponent">对手</span>
+              <button class="link-btn" type="button" id="gameCopyCode">复制</button>
+            </div>
+
+            <div class="turn-card" id="turnCard">
+              <span class="turn-disc" id="turnDisc">红</span>
+              <div>
+                <span class="turn-label" id="turnLabel">红方行棋</span>
+                <strong id="turnStrong">轮到你</strong>
+              </div>
+              <span class="turn-side" id="turnSide">RED</span>
+            </div>
+
+            <p class="game-status" id="gameStatusText">点击红方棋子选择走法。</p>
+
+            <div class="captured-block">
+              <div class="captured-row"><span>红方所俘</span><div class="captured-pieces" id="capturedByRed"></div></div>
+              <div class="captured-row"><span>黑方所俘</span><div class="captured-pieces" id="capturedByBlack"></div></div>
+            </div>
+
+            <div class="move-head"><span>棋谱</span><em id="moveCount">0 手</em></div>
+            <div class="move-list" id="moveList"><div class="move-empty">尚未落子</div></div>
+
+            <div class="game-actions" id="gameActions">
+              <button class="btn-outline" type="button" id="undoBtn">悔棋</button>
+              <button class="btn-outline" type="button" id="hintBtn" hidden>提示</button>
+              <button class="btn-outline danger" type="button" id="resignBtn">认输</button>
+              <button class="btn-ghost full" type="button" id="backBtn">返回模式选择</button>
+            </div>
+
+            <div class="online-game-actions" id="onlineGameActions" hidden>
+              <button class="btn-outline" type="button" id="onlineResignBtn">认输</button>
+              <button class="btn-ghost full" type="button" id="onlineLeaveBtn">离开房间</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-foot">
+          <span id="footMode">LOCAL · 规则引擎</span>
+          <span>红先黑后</span>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="footer">
+      <span>中国象棋 · Chinese Chess</span>
+      <span>纯前端 · 联机需保持房主页面在线</span>
+    </footer>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <div class="modal" id="helpModal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card">
+      <span class="panel-kicker">HOW TO PLAY</span>
+      <h2>象棋规则速览</h2>
+      <div class="help-grid">
+        <div><b>车</b><span>直线行走，不可越子。</span></div>
+        <div><b>马</b><span>走日字，蹩马腿时不能走。</span></div>
+        <div><b>相 / 象</b><span>走田字，塞象眼时不能走，不可过河。</span></div>
+        <div><b>仕 / 士</b><span>九宫内斜走一步。</span></div>
+        <div><b>帅 / 将</b><span>九宫内直走一步；双方帅将不可照面。</span></div>
+        <div><b>炮</b><span>移动不可越子，吃子必须隔一个炮架。</span></div>
+        <div><b>兵 / 卒</b><span>向前一步，过河后可左右走，不可后退。</span></div>
+      </div>
+      <p class="help-note">对局中若一方无合法着法，即判负（将死或困毙）。联机模式由房主维护棋局状态，双方走子通过实时中继同步。</p>
+      <button class="btn-primary full" type="button" data-close>知道了</button>
+    </div>
+  </div>
+
+  <script src="vendor/mqtt.min.js"></script>
+  <script src="ChineseChess.js"></script>
+</body>
+</html>
